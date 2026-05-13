@@ -401,6 +401,52 @@ function addSoDoPoint(xVal, yVal) {
 }
 
 /* ── SỔ ĐỎ OCR ── */
+/* ── THUẬT TOÁN BÓC TÁCH BÓNG ĐỔ (ADAPTIVE THRESHOLD) ── */
+// Thuật toán này mô phỏng CamScanner: Giúp xóa sạch bóng đổ, vùng mờ khi chụp bằng camera điện thoại
+function applyAdaptiveThreshold(imageData, width, height) {
+  var data = imageData.data;
+  var s = Math.floor(width / 16); // Cửa sổ quét (Window size)
+  var t = 15; // Độ nhạy cắt nền (Threshold percentage)
+  var intImg = new Int32Array(width * height);
+
+  // 1. Chuyển sang Grayscale và tạo mảng tích lũy (Integral Image)
+  for (var i = 0; i < width; i++) {
+    var colSum = 0;
+    for (var j = 0; j < height; j++) {
+      var index = (j * width + i) * 4;
+      var gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+      data[index] = data[index + 1] = data[index + 2] = gray;
+      
+      colSum += gray;
+      intImg[j * width + i] = (i > 0 ? intImg[j * width + i - 1] : 0) + colSum;
+    }
+  }
+
+  // 2. Tính Adaptive Threshold (So sánh pixel với trung bình khu vực xung quanh)
+  for (var i = 0; i < width; i++) {
+    for (var j = 0; j < height; j++) {
+      var x1 = Math.max(i - s, 0);
+      var x2 = Math.min(i + s, width - 1);
+      var y1 = Math.max(j - s, 0);
+      var y2 = Math.min(j + s, height - 1);
+      
+      var count = (x2 - x1) * (y2 - y1);
+      var sum = intImg[y2 * width + x2] 
+              - intImg[Math.max(y1 - 1, 0) * width + x2] 
+              - intImg[y2 * width + Math.max(x1 - 1, 0)] 
+              + intImg[Math.max(y1 - 1, 0) * width + Math.max(x1 - 1, 0)];
+
+      var index = (j * width + i) * 4;
+      // Pixel tối hơn vùng xung quanh -> chữ (Đen), sáng hơn -> nền (Trắng)
+      if (data[index] * count <= sum * (100 - t) / 100) {
+        data[index] = data[index + 1] = data[index + 2] = 0; // Đen (Chữ)
+      } else {
+        data[index] = data[index + 1] = data[index + 2] = 255; // Trắng (Nền)
+      }
+    }
+  }
+}
+
 function preprocessImageForOCR(file) {
   return new Promise(function(resolve, reject) {
     var img = new Image();
@@ -409,14 +455,22 @@ function preprocessImageForOCR(file) {
       URL.revokeObjectURL(url);
       var canvas = document.createElement('canvas');
       var ctx = canvas.getContext('2d');
-      // Tăng kích thước ảnh để OCR dễ đọc hơn (đặc biệt khi chụp màn hình)
-      var scale = img.width < 1500 ? 2 : 1;
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
       
-      // Tăng độ tương phản, chuyển trắng đen
-      ctx.filter = 'grayscale(100%) contrast(150%)';
+      // Giới hạn max width 1500px để xử lý ảnh nhanh
+      var scale = 1;
+      if (img.width < 1000) scale = 1.5;
+      else if (img.width > 1500) scale = 1500 / img.width;
+
+      canvas.width = Math.floor(img.width * scale);
+      canvas.height = Math.floor(img.height * scale);
+      
+      // Vẽ ảnh lên Canvas
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      // Lấy data ảnh và chạy thuật toán CamScanner
+      var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      applyAdaptiveThreshold(imageData, canvas.width, canvas.height);
+      ctx.putImageData(imageData, 0, 0);
       
       resolve(canvas.toDataURL('image/jpeg', 0.9));
     };
