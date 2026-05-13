@@ -13,9 +13,8 @@ var state = {
   theme: localStorage.getItem('vn2000_theme') || 'light'
 };
 
-// URL của Cloudflare Worker (Nếu có sẽ dùng AI Gemini, nếu rỗng sẽ dùng Tesseract Offline)
-// Tắt tạm do Gemini API bị chặn tại Việt Nam (User location is not supported)
-var OCR_API_URL = ''; 
+// URL của Cloudflare Worker → Dùng Vertex AI (us-central1) để tránh geo-block ở Việt Nam
+var OCR_API_URL = 'https://falling-cake-6be3.buibangduy15112004.workers.dev/';
 
 function $(id) { return document.getElementById(id); }
 
