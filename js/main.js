@@ -13,8 +13,9 @@ var state = {
   theme: localStorage.getItem('vn2000_theme') || 'light'
 };
 
-// URL của Cloudflare Worker → Dùng Vertex AI (us-central1) để tránh geo-block ở Việt Nam
-var OCR_API_URL = 'https://falling-cake-6be3.buibangduy15112004.workers.dev/';
+// Gemini API free tier chưa khả dụng tại VN (quota=0 cho mọi model 2.0)
+// Dùng Tesseract.js Offline — miễn phí, không giới hạn, đã được tối ưu PSM 6
+var OCR_API_URL = '';
 
 function $(id) { return document.getElementById(id); }
 
