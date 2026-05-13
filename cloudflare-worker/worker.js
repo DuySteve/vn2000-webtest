@@ -9,7 +9,7 @@
 
 const GCP_PROJECT_ID = 'vn2000-ocr';
 const GCP_LOCATION   = 'us-central1';       // Dùng US để tránh geo-block ở Việt Nam
-const GEMINI_MODEL   = 'gemini-2.0-flash-001';  // Vertex AI yêu cầu tên có số phiên bản cụ thể
+const GEMINI_MODEL   = 'gemini-1.5-flash-002';  // Thử 1.5 flash vì 2.0 có thể chưa available trong project mới
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
