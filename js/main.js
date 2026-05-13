@@ -13,6 +13,9 @@ var state = {
   theme: localStorage.getItem('vn2000_theme') || 'light'
 };
 
+// URL của Cloudflare Worker (Nếu có sẽ dùng AI Gemini siêu việt, nếu rỗng sẽ dùng Tesseract Offline)
+var OCR_API_URL = ''; 
+
 function $(id) { return document.getElementById(id); }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -427,26 +430,58 @@ async function onSoDoOcrUpload(e) {
   if (!file) return;
   e.target.value = ''; // reset
 
-  showToast('Đang xử lý ảnh để tối ưu khả năng đọc...', 'info', 3000);
   try {
-    if (!window.Tesseract) {
-      showToast('Thư viện quét chữ chưa tải xong, vui lòng thử lại sau giây lát!', 'warning');
-      return;
-    }
-    
     var processedImage = await preprocessImageForOCR(file);
 
-    showToast('Đang nhận dạng tọa độ... Vui lòng giữ mạng ổn định!', 'info', 5000);
-    // Sử dụng model 'eng' vì số liệu đọc bằng model tiếng Anh chuẩn xác hơn rất nhiều so với 'vie'
-    var worker = await Tesseract.createWorker('eng');
-    var res = await worker.recognize(processedImage);
-    await worker.terminate();
+    if (OCR_API_URL) {
+      // Dùng AI Gemini thông qua Cloudflare Worker (Độ chính xác 100%)
+      showToast('Đang gửi ảnh lên AI Server để phân tích...', 'info', 4000);
+      
+      var response = await fetch(OCR_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: processedImage })
+      });
+      
+      var result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      
+      var points = result.data;
+      if (!points || points.length === 0) throw new Error('AI không tìm thấy tọa độ nào hợp lệ.');
+      
+      var debugContainer = document.getElementById('ocr-debug-container');
+      var debugText = document.getElementById('ocr-debug-text');
+      if (debugContainer && debugText) {
+        debugContainer.style.display = 'block';
+        debugText.value = "=== KẾT QUẢ AI GEMINI 1.5 ===\n" + JSON.stringify(points, null, 2);
+      }
 
-    var text = res.data.text;
-    parseOcrText(text);
+      showToast('AI đã nhận diện thành công ' + points.length + ' điểm tọa độ!', 'success', 5000);
+      var list = $('sodo-points-list');
+      if (list) list.innerHTML = '';
+      _soDoPointCount = 0;
+      points.forEach(function(p) { addSoDoPoint(p.x, p.y); });
+      drawSoDo();
+
+    } else {
+      // Dùng Tesseract Offline (Fallback)
+      showToast('Đang xử lý ảnh (Chế độ Offline)...', 'info', 3000);
+      if (!window.Tesseract) {
+        showToast('Thư viện quét chữ chưa tải xong, vui lòng thử lại sau giây lát!', 'warning');
+        return;
+      }
+      
+      showToast('Đang nhận dạng tọa độ... Vui lòng giữ mạng ổn định!', 'info', 5000);
+      var worker = await Tesseract.createWorker('eng');
+      var res = await worker.recognize(processedImage);
+      await worker.terminate();
+
+      var text = res.data.text;
+      parseOcrText(text);
+    }
   } catch (err) {
     console.error(err);
-    showToast('Lỗi đọc ảnh, vui lòng thử lại.', 'error');
+    showToast('Lỗi đọc ảnh: ' + err.message, 'error', 6000);
   }
 }
 
