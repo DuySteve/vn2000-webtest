@@ -473,6 +473,15 @@ async function onSoDoOcrUpload(e) {
       
       showToast('Đang nhận dạng tọa độ... Vui lòng giữ mạng ổn định!', 'info', 5000);
       var worker = await Tesseract.createWorker('eng');
+      
+      // TỐI ƯU HÓA ĐẶC BIỆT CHO BẢNG SỐ LIỆU (OFFLINE)
+      await worker.setParameters({
+        // PSM 11 (SPARSE_TEXT): Cố gắng tìm mọi văn bản rải rác trên ảnh (Rất tốt cho bảng)
+        tessedit_pageseg_mode: '11', 
+        // Chỉ cho phép nhận diện các số và dấu chấm, phẩy, khoảng trắng. Bỏ qua toàn bộ chữ cái để không bị ảo giác!
+        tessedit_char_whitelist: '0123456789., \n'
+      });
+
       var res = await worker.recognize(processedImage);
       await worker.terminate();
 
