@@ -451,6 +451,13 @@ async function onSoDoOcrUpload(e) {
 }
 
 function parseOcrText(text) {
+  var debugContainer = document.getElementById('ocr-debug-container');
+  var debugText = document.getElementById('ocr-debug-text');
+  if (debugContainer && debugText) {
+    debugContainer.style.display = 'block';
+    debugText.value = text;
+  }
+
   // Thay thế dấu phẩy bằng dấu chấm, và thay thế chữ 'o'/'O' thành '0'
   var cleanText = text.replace(/,/g, '.').replace(/[oO]/g, '0');
   
