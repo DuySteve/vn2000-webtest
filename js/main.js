@@ -448,16 +448,16 @@ function preprocessImageForOCR(file) {
       var canvas = document.createElement('canvas');
       var ctx = canvas.getContext('2d');
       
-      // Giới hạn max width 1500px để xử lý ảnh nhanh
+      // Tesseract đọc tốt nhất ở độ phân giải siêu cao (~2400px - 3000px)
       var scale = 1;
-      if (img.width < 1000) scale = 1.5;
-      else if (img.width > 1500) scale = 1500 / img.width;
+      if (img.width < 1500) scale = 2400 / img.width;
+      else if (img.width > 3000) scale = 3000 / img.width; // Tránh tràn RAM
 
       canvas.width = Math.floor(img.width * scale);
       canvas.height = Math.floor(img.height * scale);
 
-      // Tăng cường tương phản, độ sáng và loại bỏ màu (Grayscale)
-      ctx.filter = 'grayscale(100%) contrast(160%) brightness(110%)';
+      // Ép tương phản cực mạnh để biến nền xám/bóng mờ thành trắng tinh, chữ thành đen
+      ctx.filter = 'grayscale(100%) contrast(400%) brightness(120%)';
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       ctx.filter = 'none'; // reset
       
@@ -524,10 +524,11 @@ async function onSoDoOcrUpload(e) {
       
       // TỐI ƯU HÓA ĐẶC BIỆT CHO BẢNG SỐ LIỆU (OFFLINE)
       await worker.setParameters({
-        // PSM 6 (SINGLE_BLOCK): Ép Tesseract đọc từ trái sang phải, từ trên xuống dưới như một đoạn văn bản liền mạch.
-        // Đây là chế độ tốt nhất để giữ nguyên cấu trúc dòng (Row) của bảng.
+        // PSM 6 (SINGLE_BLOCK): Ép Tesseract đọc từ trái sang phải, từ trên xuống dưới
         tessedit_pageseg_mode: '6',
-        preserve_interword_spaces: '1' // Cố gắng giữ lại khoảng trắng giữa các cột
+        preserve_interword_spaces: '1',
+        // CHỈ cho phép các ký tự xuất hiện trong bảng tọa độ (chặn rác)
+        tessedit_char_whitelist: '0123456789., XYxyPTtNnEem'
       });
 
       var res = await worker.recognize(processedImage);
@@ -553,11 +554,20 @@ function parseOcrText(text) {
     debugText.value = text;
   }
 
-  // Thay thế dấu phẩy bằng dấu chấm, và thay thế chữ 'o'/'O' thành '0'
-  var cleanText = text.replace(/,/g, '.').replace(/[oO]/g, '0');
+  // Fix các lỗi nhận diện điển hình của Tesseract đối với số
+  var cleanText = text
+    .replace(/,/g, '.')
+    .replace(/[oO]/g, '0')
+    .replace(/[sS]/g, '5')
+    .replace(/[lI|]/g, '1')
+    .replace(/[zZ]/g, '2')
+    .replace(/[bB]/g, '8');
+    
+  // Xóa khoảng trắng vô tình lọt vào quanh dấu thập phân (VD: "105 . 85" -> "105.85")
+  cleanText = cleanText.replace(/\s*([.])\s*/g, '$1');
   
-  // Nối các chữ số bị ngăn cách bởi khoảng trắng (ví dụ: "2 363 228" -> "2363228")
-  cleanText = cleanText.replace(/(\d)\s+(?=\d{3}\b)/g, '$1');
+  // Nối các chữ số bị ngăn cách bởi khoảng trắng ngẫu nhiên (ví dụ: "2 363 228" -> "2363228")
+  cleanText = cleanText.replace(/(\d)\s+(?=\d{2,3}\b)/g, '$1');
 
   var regex = /\b\d{5,8}(?:[.,]\d{1,4})?\b|\b\d{9,11}\b/g;
   
