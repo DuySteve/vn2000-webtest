@@ -169,10 +169,16 @@ CHỈ trả về JSON array, không thêm bất kỳ văn bản nào khác:
         body: JSON.stringify(payload),
       });
 
+      // Log HTTP status để debug
+      if (!aiRes.ok) {
+        const errBody = await aiRes.text();
+        throw new Error(`Vertex AI HTTP ${aiRes.status}: ${errBody}`);
+      }
+
       const data = await aiRes.json();
 
       if (data.error) {
-        throw new Error(`Vertex AI error: ${data.error.message}`);
+        throw new Error(`Vertex AI error [${data.error.code}]: ${data.error.message}`);
       }
 
       // 6. Parse kết quả
