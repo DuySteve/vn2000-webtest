@@ -107,7 +107,9 @@ function bindEvents() {
 
   /* Sổ Đỏ events */
   initSoDo();
-  $('sodo-add-point')  && $('sodo-add-point').addEventListener('click', addSoDoPoint);
+  $('sodo-add-point')  && $('sodo-add-point').addEventListener('click', function() { addSoDoPoint(); });
+  $('sodo-ocr-btn')    && $('sodo-ocr-btn').addEventListener('click', function() { $('sodo-ocr-input').click(); });
+  $('sodo-ocr-input')  && $('sodo-ocr-input').addEventListener('change', onSoDoOcrUpload);
   $('sodo-draw-btn')   && $('sodo-draw-btn').addEventListener('click', drawSoDo);
   $('sodo-clear-btn')  && $('sodo-clear-btn').addEventListener('click', function(){ clearSoDo(); showToast('Đã xóa thửa đất','info'); });
   $('sodo-copy-btn')   && $('sodo-copy-btn').addEventListener('click', copySoDoResult);
@@ -364,7 +366,7 @@ function initSoDo() {
   for(var i=0;i<4;i++) addSoDoPoint();
 }
 
-function addSoDoPoint() {
+function addSoDoPoint(xVal, yVal) {
   _soDoPointCount++;
   var n = _soDoPointCount;
   var list = $('sodo-points-list'); if(!list) return;
@@ -374,8 +376,8 @@ function addSoDoPoint() {
   row.innerHTML =
     '<div class="sodo-point-label">P'+n+'</div>'+
     '<div class="sodo-point-inputs">'+
-      '<input type="text" class="input-field input-mono sodo-x" placeholder="X (Northing)" title="X = Northing, VD: 2363228" />'+
-      '<input type="text" class="input-field input-mono sodo-y" placeholder="Y (Easting)"  title="Y = Easting,  VD: 520031" />'+
+      '<input type="text" class="input-field input-mono sodo-x" placeholder="X (Northing)" title="X = Northing, VD: 2363228" value="'+(xVal||'')+'" />'+
+      '<input type="text" class="input-field input-mono sodo-y" placeholder="Y (Easting)"  title="Y = Easting,  VD: 520031" value="'+(yVal||'')+'" />'+
     '</div>'+
     '<button class="sodo-remove-btn" title="Xóa điểm">✕</button>';
   list.appendChild(row);
@@ -393,6 +395,69 @@ function addSoDoPoint() {
       }
     });
   });
+}
+
+/* ── SỔ ĐỎ OCR ── */
+async function onSoDoOcrUpload(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  e.target.value = ''; // reset
+
+  showToast('Đang tải AI phân tích ảnh (15MB lần đầu)...', 'info', 4000);
+  try {
+    if (!window.Tesseract) {
+      showToast('Thư viện quét chữ chưa tải xong, vui lòng thử lại sau giây lát!', 'warning');
+      return;
+    }
+    
+    showToast('Đang nhận dạng tọa độ... Vui lòng giữ mạng ổn định!', 'info', 5000);
+    var worker = await Tesseract.createWorker('vie');
+    var res = await worker.recognize(file);
+    await worker.terminate();
+
+    var text = res.data.text;
+    parseOcrText(text);
+  } catch (err) {
+    console.error(err);
+    showToast('Lỗi đọc ảnh, vui lòng thử lại.', 'error');
+  }
+}
+
+function parseOcrText(text) {
+  var lines = text.split('\n');
+  var foundPoints = [];
+
+  lines.forEach(function(line) {
+    var cleanLine = line.replace(/,/g, '.').replace(/\s+/g, ' ');
+    var regex = /\b\d{5,7}(?:\.\d{1,3})?\b/g;
+    var matches = cleanLine.match(regex);
+    if (matches && matches.length >= 2) {
+      var n1 = parseFloat(matches[0]);
+      var n2 = parseFloat(matches[1]);
+      var x, y;
+      if (n1 > 800000 && n1 < 3000000) { x = n1; y = n2; }
+      else if (n2 > 800000 && n2 < 3000000) { x = n2; y = n1; }
+      else { x = Math.max(n1, n2); y = Math.min(n1, n2); }
+
+      // Validate range
+      if (x > 800000 && x < 3000000 && y > 100000 && y < 900000) {
+        foundPoints.push({ x: x, y: y });
+      }
+    }
+  });
+
+  if (foundPoints.length === 0) {
+    showToast('Không quét được tọa độ hợp lệ. Vui lòng chụp rõ nét hơn hoặc chụp thẳng góc vào bảng tọa độ!', 'warning', 6000);
+  } else {
+    showToast('Đã nhận diện thành công ' + foundPoints.length + ' điểm tọa độ!', 'success');
+    var list = $('sodo-points-list');
+    if (list) list.innerHTML = '';
+    _soDoPointCount = 0;
+    foundPoints.forEach(function(p) {
+      addSoDoPoint(p.x, p.y);
+    });
+    drawSoDo();
+  }
 }
 
 function drawSoDo() {

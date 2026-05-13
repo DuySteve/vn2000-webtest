@@ -32,6 +32,9 @@
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 
+  <!-- Tesseract OCR -->
+  <script src="https://unpkg.com/tesseract.js@v5.0.5/dist/tesseract.min.js"></script>
+
   <!-- Preload fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -347,7 +350,11 @@
         <div class="card">
           <div class="card-title" style="justify-content:space-between">
             <span>Điểm góc (VN2000)</span>
-            <button id="sodo-add-point" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">Thêm điểm</button>
+            <div class="flex gap-8">
+              <button id="sodo-ocr-btn" class="btn btn-secondary" style="font-size:11px;padding:4px 8px">Quét ảnh</button>
+              <button id="sodo-add-point" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">Thêm điểm</button>
+            </div>
+            <input type="file" id="sodo-ocr-input" accept="image/*" class="hidden" />
           </div>
           <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;line-height:1.6;padding:6px 8px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border)">
             Quy ước sổ đỏ VN: <b>cột X = Northing</b> (số lớn, VD: 2.363.228)
