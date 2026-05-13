@@ -10,7 +10,7 @@ var state = {
   lastLat: null, lastLon: null,
   lastX: null, lastY: null,
   batchResults: [],
-  theme: localStorage.getItem('vn2000_theme') || 'dark'
+  theme: localStorage.getItem('vn2000_theme') || 'light'
 };
 
 function $(id) { return document.getElementById(id); }
@@ -20,8 +20,6 @@ document.addEventListener('DOMContentLoaded', function() {
   populateProvinceSelect();
   bindEvents();
   initMap('map-container', onMapClick);
-  renderHistory();
-  handleShareURL();
   document.querySelector('.app-container').classList.add('entrance');
   initMobilePanel();
 });
@@ -30,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   var btn = $('theme-toggle');
-  if (btn) btn.textContent = t === 'dark' ? '☀️' : '🌙';
+  if (btn) btn.textContent = t === 'dark' ? 'Chế độ sáng' : 'Chế độ tối';
   localStorage.setItem('vn2000_theme', t);
 }
 
@@ -53,7 +51,7 @@ function populateProvinceSelect() {
         o.value = p.code;
         o.dataset.cm = p.cm;
         o.dataset.utmZone = p.utmZone;
-        o.textContent = (p.type==='city'?'🏙️':'🏄') + ' ' + p.fullName + ' (•' + p.cm + '°)';
+        o.textContent = p.fullName + ' (•' + p.cm + '°)';
         grp.appendChild(o);
       });
       sel.appendChild(grp);
@@ -91,34 +89,10 @@ function bindEvents() {
     if(state.lastX===null){showToast('Chưa có kết quả','warning');return;}
     copyToClipboard('X: '+formatCoordNum(state.lastX,3)+', Y: '+formatCoordNum(state.lastY,3),'Đã sao chép VN2000');
   });
-  $('share-btn') && $('share-btn').addEventListener('click', function(){
-    if(state.lastLat===null){showToast('Chưa có kết quả','warning');return;}
-    var cm = parseFloat($('cm-input').value);
-    copyToClipboard(buildShareURL(state.lastLat,state.lastLon,isNaN(cm)?105:cm),'📎 Đã sao chép link chia sẻ!');
-  });
 
   $('locate-btn') && $('locate-btn').addEventListener('click', function(){
     showToast('Đang xác định GPS...','info');
     locateUser(function(lat,lon){ $('lat-input').value=lat.toFixed(7); $('lon-input').value=lon.toFixed(7); });
-  });
-
-  var geoInput = $('geocode-input');
-  if (geoInput) {
-    geoInput.addEventListener('keydown', function(e){ if(e.key==='Enter') onGeocode(); });
-    geoInput.addEventListener('input', debounce(function(){ if(geoInput.value.length>2) onGeocode(); },600));
-  }
-  $('geocode-btn') && $('geocode-btn').addEventListener('click', onGeocode);
-
-  $('measure-btn') && $('measure-btn').addEventListener('click', toggleMeasure);
-  $('clear-measure-btn') && $('clear-measure-btn').addEventListener('click', function(){
-    setMeasureMode(false);
-    var mb = $('measure-btn');
-    if(mb){mb.textContent='📏 Đo khoảng cách';mb.classList.remove('active');}
-    showToast('Đã xóa điểm đo','info');
-  });
-
-  $('clear-history-btn') && $('clear-history-btn').addEventListener('click', function(){
-    clearHistory(); renderHistory(); showToast('Đã xóa lịch sử','info');
   });
 
   $('import-csv-btn') && $('import-csv-btn').addEventListener('click', function(){ $('csv-file-input').click(); });
@@ -194,7 +168,6 @@ function doConvert() {
         res = vn2000UTMToWGS84(x, y, utmZone);
       }
       showWGS84Result(res.lat, res.lon);
-      saveHistory({mode:'vn2000-to-wgs84',x:x,y:y,lat:res.lat,lon:res.lon,cm:cm,province:state.selectedProvince&&state.selectedProvince.name});
     } else {
       var lat = parseCoordString($('lat-input').value, 'lat');
       var lon = parseCoordString($('lon-input').value, 'lon');
@@ -210,9 +183,7 @@ function doConvert() {
       }
       showVN2000Result(res2.x, res2.y);
       updateMap(lat, lon, cm);
-      saveHistory({mode:'wgs84-to-vn2000',x:res2.x,y:res2.y,lat:lat,lon:lon,cm:cm,province:state.selectedProvince&&state.selectedProvince.name});
     }
-    renderHistory();
   } catch(e) {
     showToast('Lỗi: ' + e.message, 'error');
   }
@@ -255,74 +226,6 @@ function onMapClick(lat, lon) {
   if ($('lat-input')) $('lat-input').value = lat.toFixed(7);
   if ($('lon-input')) $('lon-input').value = lon.toFixed(7);
   showToast('Tọa độ: '+lat.toFixed(5)+', '+lon.toFixed(5),'success');
-}
-
-/* ── GEOCODE ── */
-function onGeocode() {
-  var q = ($('geocode-input') && $('geocode-input').value || '').trim();
-  if (q.length < 2) return;
-  geocodeSearch(q).then(function(results) {
-    var list = $('geocode-results'); if (!list) return;
-    if (!results.length) { list.innerHTML='<li style="color:#888;padding:8px">Không tìm thấy</li>'; list.classList.remove('hidden'); return; }
-    list.innerHTML = results.map(function(r,i){
-      return '<li class="geocode-item" data-lat="'+r.lat+'" data-lon="'+r.lon+'">' +
-        '<span class="geocode-name">'+r.display_name+'</span>' +
-        '<span class="geocode-coords">'+parseFloat(r.lat).toFixed(5)+', '+parseFloat(r.lon).toFixed(5)+'</span></li>';
-    }).join('');
-    list.classList.remove('hidden');
-    list.querySelectorAll('.geocode-item').forEach(function(item){
-      item.addEventListener('click', function(){
-        var lat=parseFloat(item.dataset.lat), lon=parseFloat(item.dataset.lon);
-        if($('lat-input')) $('lat-input').value=lat.toFixed(7);
-        if($('lon-input')) $('lon-input').value=lon.toFixed(7);
-        flyToLocation(lat,lon,14); placeMapMarker(lat,lon,null,null);
-        list.classList.add('hidden');
-      });
-    });
-  }).catch(function(){ showToast('Tìm kiếm lỗi','error'); });
-}
-
-/* ── MEASURE ── */
-var _measuringState = false;
-function toggleMeasure() {
-  _measuringState = !_measuringState;
-  setMeasureMode(_measuringState);
-  var btn=$('measure-btn');
-  if(btn){ btn.textContent=_measuringState?'🛑 Dừng đo':'📏 Đo khoảng cách'; btn.classList.toggle('active',_measuringState); }
-  showToast(_measuringState?'Click bản đồ để đo':'Đã dừng đo','info');
-}
-
-/* ── HISTORY ── */
-function renderHistory() {
-  var list=$('history-list'); if(!list) return;
-  var h=loadHistory();
-  if(!h.length){ list.innerHTML='<div class="history-empty">Chưa có lịch sử chuyển đổi</div>'; return; }
-  list.innerHTML = h.map(function(item){
-    return '<div class="history-item" data-id="'+item.id+'">' +
-      '<div class="history-header">' +
-        '<span class="history-mode">'+(item.mode==='vn2000-to-wgs84'?'🔵 VN2000→WGS84':'🟢 WGS84→VN2000')+'</span>' +
-        '<span class="history-time">'+formatTimestamp(item.timestamp)+'</span>' +
-        '<button class="history-delete-btn" data-id="'+item.id+'">✕</button>' +
-      '</div>' +
-      '<div class="history-coords">' +
-        (item.province ? '<span class="history-province">📍 '+item.province+'</span><br>' : '') +
-        'X='+formatCoordNum(item.x||0,2)+' / Y='+formatCoordNum(item.y||0,2)+'<br>' +
-        (item.lat||0).toFixed(5)+', '+(item.lon||0).toFixed(5) +
-      '</div></div>';
-  }).join('');
-
-  list.querySelectorAll('.history-delete-btn').forEach(function(btn){
-    btn.addEventListener('click', function(e){
-      e.stopPropagation();
-      deleteHistoryItem(parseInt(btn.dataset.id)); renderHistory();
-    });
-  });
-  list.querySelectorAll('.history-item').forEach(function(item){
-    item.addEventListener('click', function(){
-      var found=loadHistory().find(function(x){return x.id===parseInt(item.dataset.id);});
-      if(found&&found.lat) { flyToLocation(found.lat,found.lon,13); placeMapMarker(found.lat,found.lon,found.cm,found.province); }
-    });
-  });
 }
 
 /* ── CSV ── */

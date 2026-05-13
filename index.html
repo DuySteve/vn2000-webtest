@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi" data-theme="dark">
+<html lang="vi" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -13,7 +13,7 @@
   <meta name="keywords" content="VN2000, tọa độ, WGS84, chuyển đổi tọa độ, proj4, bản đồ Việt Nam, kinh tuyến trục, GPS" />
   <meta property="og:title" content="VN2000 Web — Chuyển đổi tọa độ Việt Nam" />
   <meta property="og:description" content="Công cụ chuyển đổi tọa độ VN2000 ↔ WGS84 chính xác theo tham số Bộ TNMT" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231f2937'/><text y='65' x='15' font-size='60'>📌</text></svg>" />
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
@@ -43,16 +43,13 @@
   <!-- ═══════════════ HEADER ═══════════════ -->
   <header class="app-header">
     <div class="logo-group">
-      <div class="logo-icon">🗺️</div>
       <div>
         <div class="logo-title">VN2000 Web</div>
-        <div class="logo-subtitle">Chuyển đổi tọa độ Việt Nam</div>
       </div>
     </div>
 
     <div class="header-actions">
-      <span class="header-badge">34 tỉnh/thành • 2025</span>
-      <button id="theme-toggle" class="btn btn-secondary btn-icon" title="Đổi giao diện">☀️</button>
+      <button id="theme-toggle" class="btn btn-secondary btn-icon" title="Đổi giao diện">Chế độ tối</button>
     </div>
   </header>
 
@@ -68,11 +65,9 @@
 
       <!-- Panel Tabs -->
       <nav class="panel-tabs" role="tablist">
-        <button class="tab-btn active" data-tab="convert" role="tab">⚡ Chuyển đổi</button>
-        <button class="tab-btn" data-tab="sodo" role="tab">🏘️ Sổ Đỏ</button>
-        <button class="tab-btn" data-tab="batch" role="tab">📋 Hàng loạt</button>
-        <button class="tab-btn" data-tab="history" role="tab">🕒 Lịch sử</button>
-        <button class="tab-btn" data-tab="tools" role="tab">🛠️ Công cụ</button>
+        <button class="tab-btn active" data-tab="convert" role="tab">Chuyển đổi</button>
+        <button class="tab-btn" data-tab="sodo" role="tab">Sổ Đỏ</button>
+        <button class="tab-btn" data-tab="batch" role="tab">Hàng loạt</button>
       </nav>
 
       <!-- ══ TAB: CONVERT ══ -->
@@ -80,7 +75,7 @@
 
         <!-- Chọn Tỉnh/Thành -->
         <div class="card">
-          <div class="card-title">📍 Khu vực</div>
+          <div class="card-title">Khu vực</div>
 
           <div class="form-group">
             <label for="province-select">Tỉnh / Thành phố</label>
@@ -95,11 +90,11 @@
             <div class="zone-radio-group">
               <div class="zone-radio-item">
                 <input type="radio" name="zone-type" id="zone-tm3" value="tm3" checked />
-                <label for="zone-tm3">🎯 TM-3 (Múi 3°)</label>
+                <label for="zone-tm3">TM-3 (Múi 3°)</label>
               </div>
               <div class="zone-radio-item">
                 <input type="radio" name="zone-type" id="zone-utm" value="utm" />
-                <label for="zone-utm">🌐 UTM (Múi 6°)</label>
+                <label for="zone-utm">UTM (Múi 6°)</label>
               </div>
             </div>
           </div>
@@ -121,7 +116,7 @@
                 <span class="input-suffix">°</span>
               </div>
               <div id="cm-display" class="ktt-display" style="display:none">
-                🎯 <span>Kinh tuyến trục: —</span>
+                <span>Kinh tuyến trục: —</span>
               </div>
             </div>
           </div>
@@ -147,14 +142,14 @@
         <!-- Mode Bar -->
         <div class="mode-bar">
           <span class="mode-label-text">
-            🔄 <span id="mode-label">VN2000 → WGS84</span>
+            <span id="mode-label">VN2000 → WGS84</span>
           </span>
           <button id="swap-btn" class="btn btn-secondary btn-icon" title="Đổi chiều chuyển đổi">⇅</button>
         </div>
 
         <!-- Input VN2000 -->
         <div id="vn2000-input-section" class="card">
-          <div class="card-title">📐 Tọa độ VN2000 (Đầu vào)</div>
+          <div class="card-title">Tọa độ VN2000 (Đầu vào)</div>
 
           <div class="form-group">
             <label for="x-input">X — Easting (m)</label>
@@ -179,7 +174,7 @@
 
         <!-- Input WGS84 (ẩn ban đầu) -->
         <div id="wgs84-input-section" class="card hidden">
-          <div class="card-title">🌐 Tọa độ WGS84/GPS (Đầu vào)</div>
+          <div class="card-title">Tọa độ WGS84/GPS (Đầu vào)</div>
 
           <div class="form-group">
             <label for="lat-input">Vĩ độ (Lat)</label>
@@ -195,7 +190,7 @@
 
           <div class="flex gap-8" style="margin-top:4px">
             <button id="locate-btn" class="btn btn-ghost" style="flex:1">
-              📍 Lấy vị trí GPS
+              Lấy vị trí GPS
             </button>
           </div>
 
@@ -204,7 +199,7 @@
 
         <!-- Convert Button -->
         <button id="convert-btn" class="btn btn-primary btn-full" style="margin-bottom:12px">
-          ⚡ Chuyển đổi
+          Chuyển đổi
         </button>
 
         <!-- Result Section -->
@@ -212,7 +207,7 @@
 
           <!-- WGS84 result (khi convert VN2000→WGS84) -->
           <div id="wgs84-result-card" class="result-card">
-            <div class="result-title">🌐 Kết quả WGS84</div>
+            <div class="result-title">Kết quả WGS84</div>
 
             <div class="result-row">
               <span class="result-label">Vĩ độ (Lat)</span>
@@ -233,7 +228,7 @@
 
           <!-- VN2000 result (khi convert WGS84→VN2000) -->
           <div id="vn2000-result-card" class="result-card hidden">
-            <div class="result-title">📐 Kết quả VN2000</div>
+            <div class="result-title">Kết quả VN2000</div>
 
             <div class="result-row">
               <span class="result-label">X — Easting</span>
@@ -249,19 +244,16 @@
           <!-- Actions -->
           <div class="result-actions">
             <button id="copy-wgs84-btn" class="btn btn-secondary" style="flex:1">
-              📋 Copy WGS84
+              Copy WGS84
             </button>
             <button id="copy-vn2000-btn" class="btn btn-secondary" style="flex:1">
-              📋 Copy VN2000
-            </button>
-            <button id="share-btn" class="btn btn-ghost" style="flex:1">
-              🔗 Chia sẻ
+              Copy VN2000
             </button>
           </div>
 
           <!-- Google Maps Link -->
           <a id="google-maps-link" class="gm-link hidden" target="_blank" rel="noopener">
-            🗺️ Mở trên Google Maps ↗
+            Mở trên Google Maps ↗
           </a>
         </div>
 
@@ -271,7 +263,7 @@
       <!-- ══ TAB: BATCH (Hàng loạt) ══ -->
       <div id="tab-batch" class="tab-content" role="tabpanel">
         <div class="card">
-          <div class="card-title">📂 Import / Export CSV</div>
+          <div class="card-title">Import / Export CSV</div>
 
           <p class="text-sm text-muted" style="margin-bottom:12px; line-height:1.7">
             Import file CSV chứa cột <code>X,Y</code> (VN2000) hoặc <code>Lat,Lon</code> (WGS84).
@@ -280,19 +272,19 @@
 
           <div class="flex gap-8" style="margin-bottom:8px">
             <button id="import-csv-btn" class="btn btn-primary" style="flex:1">
-              📂 Import CSV
+              Import CSV
             </button>
             <button id="export-csv-btn" class="btn btn-secondary" style="flex:1">
-              💾 Export CSV
+              Export CSV
             </button>
           </div>
 
           <div class="flex gap-8" style="margin-bottom:8px">
             <button id="export-kml-batch-btn" class="btn btn-secondary" style="flex:1">
-              🌍 Xuất KML (Google Earth)
+              Xuất KML
             </button>
             <button id="download-template-btn" class="btn btn-ghost" style="flex:1">
-              📄 Tải file mẫu (.csv)
+              Tải file mẫu (.csv)
             </button>
           </div>
 
@@ -327,7 +319,7 @@
       <div id="tab-sodo" class="tab-content" role="tabpanel">
 
         <div class="card">
-          <div class="card-title">🏘️ Vẽ thửa đất từ Sổ Đỏ</div>
+          <div class="card-title">Vẽ thửa đất từ Sổ Đỏ</div>
           <p class="text-sm text-muted" style="margin-bottom:12px;line-height:1.6">
             Nhập các điểm góc thửa đất (tọa độ VN2000 từ sổ đỏ/bản đồ địa chính).
             Hệ thống sẽ vẽ thửa và tính diện tích, chu vi.
@@ -341,7 +333,7 @@
           </div>
 
           <div id="sodo-ktt-display" class="ktt-display" style="display:none">
-            🎯 <span id="sodo-ktt-text">KTT: —</span>
+            <span id="sodo-ktt-text">KTT: —</span>
           </div>
 
           <div class="form-group">
@@ -354,11 +346,11 @@
         <!-- Danh sách điểm góc -->
         <div class="card">
           <div class="card-title" style="justify-content:space-between">
-            <span>📍 Điểm góc (VN2000)</span>
-            <button id="sodo-add-point" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">➕ Thêm điểm</button>
+            <span>Điểm góc (VN2000)</span>
+            <button id="sodo-add-point" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">Thêm điểm</button>
           </div>
           <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;line-height:1.6;padding:6px 8px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border)">
-            💡 Quy ước sổ đỏ VN: <b>cột X = Northing</b> (số lớn, VD: 2.363.228)
+            Quy ước sổ đỏ VN: <b>cột X = Northing</b> (số lớn, VD: 2.363.228)
             &nbsp;&nbsp;│&nbsp;&nbsp; <b>cột Y = Easting</b> (số nhỏ, VD: 520.031)
           </div>
 
@@ -366,14 +358,14 @@
         </div>
 
         <div class="flex gap-8" style="margin-bottom:12px">
-          <button id="sodo-draw-btn" class="btn btn-primary" style="flex:1">🔺 Vẽ thửa đất</button>
-          <button id="sodo-clear-btn" class="btn btn-secondary">🗑️ Xóa</button>
+          <button id="sodo-draw-btn" class="btn btn-primary" style="flex:1">Vẽ thửa đất</button>
+          <button id="sodo-clear-btn" class="btn btn-secondary">Xóa</button>
         </div>
 
         <!-- Kết quả -->
         <div id="sodo-result" class="hidden">
           <div class="result-card">
-            <div class="result-title">📊 Thông tin thửa đất</div>
+            <div class="result-title">Thông tin thửa đất</div>
             <div class="result-row">
               <span class="result-label">Diện tích</span>
               <span class="result-value" id="sodo-area">—</span>
@@ -384,8 +376,8 @@
             </div>
             <div id="sodo-edges" style="margin-top:8px;font-size:12px;color:var(--text-secondary)"></div>
             <div class="flex gap-8" style="margin-top:10px">
-              <button id="sodo-copy-btn" class="btn btn-ghost" style="flex:1">📋 Copy kết quả</button>
-              <button id="sodo-kml-btn" class="btn btn-secondary" style="flex:1; border-color:var(--accent); color:var(--accent)">🌍 Tải file KML</button>
+              <button id="sodo-copy-btn" class="btn btn-ghost" style="flex:1">Copy kết quả</button>
+              <button id="sodo-kml-btn" class="btn btn-secondary" style="flex:1; border-color:var(--accent); color:var(--accent)">Xuất file KML</button>
             </div>
           </div>
         </div>

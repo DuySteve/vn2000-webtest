@@ -14,12 +14,11 @@ function showToast(msg, type, dur) {
     document.body.appendChild(c);
   }
   var colors = { success:'#00C896', error:'#FF4757', info:'#4ECDC4', warning:'#FFD700' };
-  var icons  = { success:'✅', error:'❌', info:'ℹ️', warning:'⚠️' };
   var t = document.createElement('div');
   t.style.cssText = 'background:#1a2035;border:1px solid '+colors[type]+'55;border-left:4px solid '+colors[type]+
     ';color:#e0e0e0;padding:12px 16px;border-radius:8px;font-family:Inter,sans-serif;font-size:14px;'+
     'max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,.4);display:flex;align-items:center;gap:8px;animation:slideInRight .3s ease;transition:opacity .3s';
-  t.innerHTML = '<span>'+icons[type]+'</span><span>'+msg+'</span>';
+  t.innerHTML = '<span>'+msg+'</span>';
   c.appendChild(t);
   setTimeout(function(){ t.style.opacity='0'; setTimeout(function(){ t.remove(); },300); }, dur);
 }
@@ -34,46 +33,6 @@ function copyToClipboard(text, msg) {
     document.body.appendChild(ta); ta.select(); document.execCommand('copy');
     document.body.removeChild(ta); showToast(msg||'Đã sao chép!','success');
   }
-}
-
-/* ── SHARE URL ── */
-function buildShareURL(lat, lon, cm) {
-  var url = new URL(window.location.href);
-  url.searchParams.set('lat', lat.toFixed(7));
-  url.searchParams.set('lon', lon.toFixed(7));
-  if (cm) url.searchParams.set('cm', cm);
-  return url.toString();
-}
-
-function readShareURL() {
-  var p = new URLSearchParams(window.location.search);
-  var lat = parseFloat(p.get('lat')), lon = parseFloat(p.get('lon')), cm = parseFloat(p.get('cm'));
-  if (!isNaN(lat) && !isNaN(lon)) return { lat:lat, lon:lon, cm: isNaN(cm)?null:cm };
-  return null;
-}
-
-/* ── HISTORY ── */
-var HISTORY_KEY = 'vn2000_history';
-var MAX_HISTORY = 20;
-
-function saveHistory(entry) {
-  var h = loadHistory();
-  h.unshift(Object.assign({}, entry, { timestamp: new Date().toISOString(), id: Date.now() }));
-  if (h.length > MAX_HISTORY) h.splice(MAX_HISTORY);
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch(e){}
-}
-
-function loadHistory() {
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e){ return []; }
-}
-
-function clearHistory() {
-  try { localStorage.removeItem(HISTORY_KEY); } catch(e){}
-}
-
-function deleteHistoryItem(id) {
-  var h = loadHistory().filter(function(x){ return x.id !== id; });
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch(e){}
 }
 
 /* ── CSV EXPORT ── */
