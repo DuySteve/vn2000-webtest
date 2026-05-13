@@ -401,56 +401,12 @@ function addSoDoPoint(xVal, yVal) {
 }
 
 /* ── SỔ ĐỎ OCR ── */
-/* ── THUẬT TOÁN BÓC TÁCH BÓNG ĐỔ (ADAPTIVE THRESHOLD) ── */
-// Thuật toán này mô phỏng CamScanner: Giúp xóa sạch bóng đổ, vùng mờ khi chụp bằng camera điện thoại
-function applyAdaptiveThreshold(imageData, width, height) {
-  var data = imageData.data;
-  var s = Math.floor(width / 16); // Cửa sổ quét (Window size)
-  var t = 15; // Độ nhạy cắt nền (Threshold percentage)
-  var intImg = new Int32Array(width * height);
-
-  // 1. Chuyển sang Grayscale và tạo mảng tích lũy (Integral Image)
-  for (var i = 0; i < width; i++) {
-    var colSum = 0;
-    for (var j = 0; j < height; j++) {
-      var index = (j * width + i) * 4;
-      var gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
-      data[index] = data[index + 1] = data[index + 2] = gray;
-      
-      colSum += gray;
-      intImg[j * width + i] = (i > 0 ? intImg[j * width + i - 1] : 0) + colSum;
-    }
-  }
-
-  // 2. Tính Adaptive Threshold (So sánh pixel với trung bình khu vực xung quanh)
-  for (var i = 0; i < width; i++) {
-    for (var j = 0; j < height; j++) {
-      var x1 = Math.max(i - s, 0);
-      var x2 = Math.min(i + s, width - 1);
-      var y1 = Math.max(j - s, 0);
-      var y2 = Math.min(j + s, height - 1);
-      
-      var count = (x2 - x1) * (y2 - y1);
-      var sum = intImg[y2 * width + x2] 
-              - intImg[Math.max(y1 - 1, 0) * width + x2] 
-              - intImg[y2 * width + Math.max(x1 - 1, 0)] 
-              + intImg[Math.max(y1 - 1, 0) * width + Math.max(x1 - 1, 0)];
-
-      var index = (j * width + i) * 4;
-      // Pixel tối hơn vùng xung quanh -> chữ (Đen), sáng hơn -> nền (Trắng)
-      if (data[index] * count <= sum * (100 - t) / 100) {
-        data[index] = data[index + 1] = data[index + 2] = 0; // Đen (Chữ)
-      } else {
-        data[index] = data[index + 1] = data[index + 2] = 255; // Trắng (Nền)
-      }
-    }
-  }
-}
-
+// Xử lý ảnh trước khi quét để tăng độ tương phản, khử nhiễu
+// Sử dụng bộ lọc tiêu chuẩn thay vì Adaptive Threshold để không bị mất chữ khi nằm sát đường kẻ bảng
 function preprocessImageForOCR(file) {
   return new Promise(function(resolve, reject) {
-    var img = new Image();
     var url = URL.createObjectURL(file);
+    var img = new Image();
     img.onload = function() {
       URL.revokeObjectURL(url);
       var canvas = document.createElement('canvas');
@@ -463,14 +419,11 @@ function preprocessImageForOCR(file) {
 
       canvas.width = Math.floor(img.width * scale);
       canvas.height = Math.floor(img.height * scale);
-      
-      // Vẽ ảnh lên Canvas
+
+      // Tăng cường tương phản, độ sáng và loại bỏ màu (Grayscale)
+      ctx.filter = 'grayscale(100%) contrast(160%) brightness(110%)';
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      
-      // Lấy data ảnh và chạy thuật toán CamScanner
-      var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      applyAdaptiveThreshold(imageData, canvas.width, canvas.height);
-      ctx.putImageData(imageData, 0, 0);
+      ctx.filter = 'none'; // reset
       
       resolve(canvas.toDataURL('image/jpeg', 0.9));
     };
@@ -562,30 +515,34 @@ function parseOcrText(text) {
   // Nối các chữ số bị ngăn cách bởi khoảng trắng (ví dụ: "2 363 228" -> "2363228")
   cleanText = cleanText.replace(/(\d)\s+(?=\d{3}\b)/g, '$1');
 
-  var regex = /\b\d{5,8}(?:\.\d{1,4})?\b/g;
-  var matches = cleanText.match(regex) || [];
-  
-  var xs = [];
-  var ys = [];
-  
-  matches.forEach(function(m) {
-    var val = parseFloat(m);
-    if (val >= 800000 && val <= 3000000) xs.push(val);
-    else if (val >= 100000 && val <= 900000) ys.push(val);
-  });
-
-  var foundPoints = [];
+  var regex = /\b\d{5,8}(?:[.,]\d{1,4})?\b|\b\d{9,11}\b/g;
   
   // Cách 1: Thử parse theo dòng trước
   var lines = cleanText.split('\n');
   var pairedByLine = [];
+  var xs = [], ys = []; // Để fallback
+  var foundPoints = [];
+
   lines.forEach(function(line) {
     var lineMatches = line.match(regex) || [];
     var lxs = [], lys = [];
     lineMatches.forEach(function(m) {
       var val = parseFloat(m.replace(',', '.'));
-      if (val >= 800000 && val <= 3000000) lxs.push(val);
-      else if (val >= 100000 && val <= 900000) lys.push(val);
+      
+      // Khôi phục dấu chấm thập phân nếu OCR đọc thiếu (rất hay xảy ra)
+      // Ví dụ OCR đọc 2363228.565 thành 2363228565 (10 số)
+      if (m.indexOf('.') === -1 && m.indexOf(',') === -1 && m.length >= 9) {
+        if (m.length === 10 || (m.length === 11 && m.startsWith('2'))) {
+          // Tọa độ X (Northing) luôn có 7 số phần nguyên
+          val = parseFloat(m.substring(0, 7) + '.' + m.substring(7));
+        } else if (m.length === 9 || (m.length === 10 && !m.startsWith('2'))) {
+          // Tọa độ Y (Easting) luôn có 6 số phần nguyên
+          val = parseFloat(m.substring(0, 6) + '.' + m.substring(6));
+        }
+      }
+
+      if (val >= 800000 && val <= 3000000) { lxs.push(val); xs.push(val); }
+      else if (val >= 100000 && val <= 900000) { lys.push(val); ys.push(val); }
     });
     // Nếu dòng có 1 X và 1 Y -> Cặp chuẩn
     if (lxs.length === 1 && lys.length === 1) {
