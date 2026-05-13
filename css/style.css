@@ -8,11 +8,12 @@
 
 /* ── CSS Variables ───────────────────────────────────────── */
 :root {
-  --accent:         #00C896;
-  --accent-dim:     #00C89622;
-  --accent-hover:   #00e0aa;
-  --accent2:        #4ECDC4;
-  --gold:           #FFD700;
+  /* Agribank Brand Colors */
+  --accent:         #A31720; /* Agribank Burgundy */
+  --accent-dim:     #A3172022;
+  --accent-hover:   #C81D27; /* Brighter red for hover */
+  --accent2:        #006A3A; /* Agribank Dark Green */
+  --gold:           #F7A800; /* Agribank Yellow/Gold */
   --danger:         #FF4757;
   --warning:        #FFA502;
 
@@ -23,7 +24,7 @@
   --bg-input:       #111827;
   --bg-hover:       #1f2d3d;
   --border:         rgba(255,255,255,0.08);
-  --border-accent:  rgba(0,200,150,0.3);
+  --border-accent:  rgba(163,23,32,0.5); /* Burgundy border */
   --text-primary:   #E6EDF3;
   --text-secondary: #8B949E;
   --text-muted:     #484F58;
@@ -44,7 +45,7 @@
   --bg-input:       #F1F5F9;
   --bg-hover:       #E8F0FE;
   --border:         rgba(0,0,0,0.08);
-  --border-accent:  rgba(0,200,150,0.4);
+  --border-accent:  rgba(163,23,32,0.5); /* Burgundy border */
   --text-primary:   #1E293B;
   --text-secondary: #475569;
   --text-muted:     #94A3B8;
