@@ -530,10 +530,10 @@ async function onSoDoOcrUpload(e) {
       
       // TỐI ƯU HÓA ĐẶC BIỆT CHO BẢNG SỐ LIỆU (OFFLINE)
       await worker.setParameters({
-        // PSM 11 (SPARSE_TEXT): Cố gắng tìm mọi văn bản rải rác trên ảnh (Rất tốt cho bảng)
-        tessedit_pageseg_mode: '11', 
-        // Chỉ cho phép nhận diện các số và dấu chấm, phẩy, khoảng trắng. Bỏ qua toàn bộ chữ cái để không bị ảo giác!
-        tessedit_char_whitelist: '0123456789., \n'
+        // PSM 6 (SINGLE_BLOCK): Ép Tesseract đọc từ trái sang phải, từ trên xuống dưới như một đoạn văn bản liền mạch.
+        // Đây là chế độ tốt nhất để giữ nguyên cấu trúc dòng (Row) của bảng.
+        tessedit_pageseg_mode: '6',
+        preserve_interword_spaces: '1' // Cố gắng giữ lại khoảng trắng giữa các cột
       });
 
       var res = await worker.recognize(processedImage);
@@ -583,7 +583,7 @@ function parseOcrText(text) {
     var lineMatches = line.match(regex) || [];
     var lxs = [], lys = [];
     lineMatches.forEach(function(m) {
-      var val = parseFloat(m);
+      var val = parseFloat(m.replace(',', '.'));
       if (val >= 800000 && val <= 3000000) lxs.push(val);
       else if (val >= 100000 && val <= 900000) lys.push(val);
     });
