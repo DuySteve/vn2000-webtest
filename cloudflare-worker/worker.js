@@ -9,7 +9,7 @@
  *   - API key được bảo mật trong env, không lộ ra frontend
  */
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent';
 
 export default {
   async fetch(request, env, ctx) {
