@@ -9,50 +9,33 @@
 /* ── CSS Variables ───────────────────────────────────────── */
 :root {
   /* Agribank Brand Colors */
-  --accent:         #A31720; /* Agribank Burgundy */
-  --accent-dim:     #A3172022;
-  --accent-hover:   #C81D27; /* Brighter red for hover */
-  --accent2:        #006A3A; /* Agribank Dark Green */
-  --gold:           #F7A800; /* Agribank Yellow/Gold */
+  --accent:         #A6192E; /* Agribank Burgundy */
+  --accent-dim:     #A6192E1A;
+  --accent-hover:   #8C1527; 
+  --accent2:        #D4AF37; /* Agribank Gold */
+  --gold:           #D4AF37; 
   --danger:         #FF4757;
   --warning:        #FFA502;
 
-  /* Dark theme (default) */
-  --bg-base:        #0D1117;
-  --bg-surface:     #161B27;
-  --bg-card:        #1C2333;
-  --bg-input:       #111827;
-  --bg-hover:       #1f2d3d;
-  --border:         rgba(255,255,255,0.08);
-  --border-accent:  rgba(163,23,32,0.5); /* Burgundy border */
-  --text-primary:   #E6EDF3;
-  --text-secondary: #8B949E;
-  --text-muted:     #484F58;
-  --shadow:         0 8px 32px rgba(0,0,0,0.5);
-  --shadow-sm:      0 2px 12px rgba(0,0,0,0.3);
-  --glass:          rgba(22,27,39,0.85);
-  --glass-border:   rgba(255,255,255,0.06);
+  /* Agribank Light Theme (Single Theme) */
+  --bg-base:        #FAF6F0; /* Soft beige/cream */
+  --bg-surface:     #FFFFFF;
+  --bg-card:        #FFFFFF;
+  --bg-input:       #F5F0E6;
+  --bg-hover:       #F0E5D8;
+  --border:         rgba(166, 25, 46, 0.15); /* Light burgundy border */
+  --border-accent:  rgba(166, 25, 46, 0.4);
+  --text-primary:   #2C1E1E;
+  --text-secondary: #5E4B4B;
+  --text-muted:     #8C7A7A;
+  --shadow:         0 8px 32px rgba(166, 25, 46, 0.08);
+  --shadow-sm:      0 2px 8px rgba(166, 25, 46, 0.05);
+  --glass:          rgba(255, 255, 255, 0.95);
+  --glass-border:   rgba(166, 25, 46, 0.1);
   --radius:         12px;
   --radius-sm:      8px;
   --radius-lg:      16px;
   --transition:     0.2s cubic-bezier(0.4,0,0.2,1);
-}
-
-[data-theme="light"] {
-  --bg-base:        #F0F4F8;
-  --bg-surface:     #FFFFFF;
-  --bg-card:        #F8FAFC;
-  --bg-input:       #F1F5F9;
-  --bg-hover:       #E8F0FE;
-  --border:         rgba(0,0,0,0.08);
-  --border-accent:  rgba(163,23,32,0.5); /* Burgundy border */
-  --text-primary:   #1E293B;
-  --text-secondary: #475569;
-  --text-muted:     #94A3B8;
-  --shadow:         0 8px 32px rgba(0,0,0,0.12);
-  --shadow-sm:      0 2px 8px rgba(0,0,0,0.08);
-  --glass:          rgba(255,255,255,0.92);
-  --glass-border:   rgba(0,0,0,0.06);
 }
 
 /* ── Reset ───────────────────────────────────────────────── */
@@ -118,12 +101,13 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 14px 24px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(12px);
+  background: var(--accent); /* Agribank Burgundy Header */
+  color: #FFFFFF;
+  border-bottom: 3px solid var(--gold); /* Gold accent line */
   position: sticky;
   top: 0;
   z-index: 100;
+  box-shadow: var(--shadow-sm);
 }
 
 .logo-group {
@@ -134,27 +118,25 @@ body {
 
 .logo-icon {
   width: 38px; height: 38px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  border-radius: 10px;
+  background: #FFFFFF;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  box-shadow: 0 0 16px var(--accent-dim);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 
 .logo-title {
-  font-size: 18px;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 20px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: 0.5px;
 }
 
 .logo-subtitle {
   font-size: 11px;
-  color: var(--text-secondary);
+  color: rgba(255,255,255,0.8);
   margin-top: -2px;
 }
 
