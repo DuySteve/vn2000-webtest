@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VN2000 Web — Chuyển đổi tọa độ Việt Nam</title>
+  <meta name="description" content="Công cụ chuyển đổi tọa độ VN2000 ↔ WGS84 trực tuyến. Hỗ trợ 34 tỉnh/thành sau sáp nhập 2025, múi chiếu TM-3 và UTM, bản đồ tương tác Leaflet." />
+  <meta name="keywords" content="VN2000, tọa độ, WGS84, chuyển đổi tọa độ, proj4, bản đồ Việt Nam, kinh tuyến trục, GPS" />
+  <meta property="og:title" content="VN2000 Web — Chuyển đổi tọa độ Việt Nam" />
+  <meta property="og:description" content="Công cụ chuyển đổi tọa độ VN2000 ↔ WGS84 chính xác theo tham số Bộ TNMT" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>" />
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+
+  <!-- Preload fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+</head>
+<body>
+
+<div class="app-container" id="app">
+
+  <!-- ═══════════════ HEADER ═══════════════ -->
+  <header class="app-header">
+    <div class="logo-group">
+      <div class="logo-icon">🗺️</div>
+      <div>
+        <div class="logo-title">VN2000 Web</div>
+        <div class="logo-subtitle">Chuyển đổi tọa độ Việt Nam</div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <span class="header-badge">34 tỉnh/thành • 2025</span>
+      <button id="theme-toggle" class="btn btn-secondary btn-icon" title="Đổi giao diện">☀️</button>
+    </div>
+  </header>
+
+  <!-- ═══════════════ MAIN ═══════════════ -->
+  <main class="main-content">
+
+    <!-- ─────── CONTROL PANEL (LEFT) ─────── -->
+    <aside class="control-panel">
+
+      <!-- Panel Tabs -->
+      <nav class="panel-tabs" role="tablist">
+        <button class="tab-btn active" data-tab="convert" role="tab">⚡ Chuyển đổi</button>
+        <button class="tab-btn" data-tab="sodo" role="tab">🏘️ Sổ Đỏ</button>
+        <button class="tab-btn" data-tab="batch" role="tab">📋 Hàng loạt</button>
+        <button class="tab-btn" data-tab="history" role="tab">🕒 Lịch sử</button>
+        <button class="tab-btn" data-tab="tools" role="tab">🛠️ Công cụ</button>
+      </nav>
+
+      <!-- ══ TAB: CONVERT ══ -->
+      <div id="tab-convert" class="tab-content active" role="tabpanel">
+
+        <!-- Chọn Tỉnh/Thành -->
+        <div class="card">
+          <div class="card-title">📍 Khu vực</div>
+
+          <div class="form-group">
+            <label for="province-select">Tỉnh / Thành phố</label>
+            <select id="province-select">
+              <option value="">-- Chọn tỉnh/thành phố --</option>
+            </select>
+          </div>
+
+          <!-- Zone type -->
+          <div class="form-group">
+            <label>Hệ chiếu</label>
+            <div class="zone-radio-group">
+              <div class="zone-radio-item">
+                <input type="radio" name="zone-type" id="zone-tm3" value="tm3" checked />
+                <label for="zone-tm3">🎯 TM-3 (Múi 3°)</label>
+              </div>
+              <div class="zone-radio-item">
+                <input type="radio" name="zone-type" id="zone-utm" value="utm" />
+                <label for="zone-utm">🌐 UTM (Múi 6°)</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- TM-3 options -->
+          <div id="tm3-options">
+            <div class="form-group">
+              <label for="cm-input">Kinh tuyến trục (°)</label>
+              <div class="input-suffix-group">
+                <input
+                  type="number"
+                  id="cm-input"
+                  class="input-field input-mono"
+                  placeholder="Vd: 105, 105.5, 107.75..."
+                  step="0.25"
+                  min="102"
+                  max="109"
+                />
+                <span class="input-suffix">°</span>
+              </div>
+              <div id="cm-display" class="ktt-display" style="display:none">
+                🎯 <span>Kinh tuyến trục: —</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- UTM options -->
+          <div id="utm-options" style="display:none">
+            <div class="form-group">
+              <label>UTM Zone</label>
+              <div class="zone-radio-group">
+                <div class="zone-radio-item">
+                  <input type="radio" name="utm-zone" id="utm-48" value="48" checked />
+                  <label for="utm-48">Zone 48N (Tây)</label>
+                </div>
+                <div class="zone-radio-item">
+                  <input type="radio" name="utm-zone" id="utm-49" value="49" />
+                  <label for="utm-49">Zone 49N (Đông)</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode Bar -->
+        <div class="mode-bar">
+          <span class="mode-label-text">
+            🔄 <span id="mode-label">VN2000 → WGS84</span>
+          </span>
+          <button id="swap-btn" class="btn btn-secondary btn-icon" title="Đổi chiều chuyển đổi">⇅</button>
+        </div>
+
+        <!-- Input VN2000 -->
+        <div id="vn2000-input-section" class="card">
+          <div class="card-title">📐 Tọa độ VN2000 (Đầu vào)</div>
+
+          <div class="form-group">
+            <label for="x-input">X — Easting (m)</label>
+            <div class="input-suffix-group">
+              <input type="text" id="x-input" class="input-field input-mono"
+                placeholder="Vd: 588848.123" />
+              <span class="input-suffix">m</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="y-input">Y — Northing (m)</label>
+            <div class="input-suffix-group">
+              <input type="text" id="y-input" class="input-field input-mono"
+                placeholder="Vd: 2321456.789" />
+              <span class="input-suffix">m</span>
+            </div>
+          </div>
+
+          <div id="vn2000-error" class="field-error"></div>
+        </div>
+
+        <!-- Input WGS84 (ẩn ban đầu) -->
+        <div id="wgs84-input-section" class="card hidden">
+          <div class="card-title">🌐 Tọa độ WGS84/GPS (Đầu vào)</div>
+
+          <div class="form-group">
+            <label for="lat-input">Vĩ độ (Lat)</label>
+            <input type="text" id="lat-input" class="input-field input-mono"
+              placeholder="Vd: 21.0285 hoặc 21°1'42.6&quot;N" />
+          </div>
+
+          <div class="form-group">
+            <label for="lon-input">Kinh độ (Lon)</label>
+            <input type="text" id="lon-input" class="input-field input-mono"
+              placeholder="Vd: 105.8542 hoặc 105°51'15.1&quot;E" />
+          </div>
+
+          <div class="flex gap-8" style="margin-top:4px">
+            <button id="locate-btn" class="btn btn-ghost" style="flex:1">
+              📍 Lấy vị trí GPS
+            </button>
+          </div>
+
+          <div id="wgs84-error" class="field-error"></div>
+        </div>
+
+        <!-- Convert Button -->
+        <button id="convert-btn" class="btn btn-primary btn-full" style="margin-bottom:12px">
+          ⚡ Chuyển đổi
+        </button>
+
+        <!-- Result Section -->
+        <div id="result-section" class="result-section hidden">
+
+          <!-- WGS84 result (khi convert VN2000→WGS84) -->
+          <div id="wgs84-result-card" class="result-card">
+            <div class="result-title">🌐 Kết quả WGS84</div>
+
+            <div class="result-row">
+              <span class="result-label">Vĩ độ (Lat)</span>
+              <div>
+                <div class="result-value" id="result-lat-dd">—</div>
+                <div class="result-dms" id="result-lat-dms">—</div>
+              </div>
+            </div>
+
+            <div class="result-row">
+              <span class="result-label">Kinh độ (Lon)</span>
+              <div>
+                <div class="result-value" id="result-lon-dd">—</div>
+                <div class="result-dms" id="result-lon-dms">—</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- VN2000 result (khi convert WGS84→VN2000) -->
+          <div id="vn2000-result-card" class="result-card hidden">
+            <div class="result-title">📐 Kết quả VN2000</div>
+
+            <div class="result-row">
+              <span class="result-label">X — Easting</span>
+              <div class="result-value" id="result-x">—</div>
+            </div>
+
+            <div class="result-row">
+              <span class="result-label">Y — Northing</span>
+              <div class="result-value" id="result-y">—</div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="result-actions">
+            <button id="copy-wgs84-btn" class="btn btn-secondary" style="flex:1">
+              📋 Copy WGS84
+            </button>
+            <button id="copy-vn2000-btn" class="btn btn-secondary" style="flex:1">
+              📋 Copy VN2000
+            </button>
+            <button id="share-btn" class="btn btn-ghost" style="flex:1">
+              🔗 Chia sẻ
+            </button>
+          </div>
+
+          <!-- Google Maps Link -->
+          <a id="google-maps-link" class="gm-link hidden" target="_blank" rel="noopener">
+            🗺️ Mở trên Google Maps ↗
+          </a>
+        </div>
+
+      </div>
+      <!-- END TAB: CONVERT -->
+
+      <!-- ══ TAB: BATCH (Hàng loạt) ══ -->
+      <div id="tab-batch" class="tab-content" role="tabpanel">
+        <div class="card">
+          <div class="card-title">📂 Import / Export CSV</div>
+
+          <p class="text-sm text-muted" style="margin-bottom:12px; line-height:1.7">
+            Import file CSV chứa cột <code>X,Y</code> (VN2000) hoặc <code>Lat,Lon</code> (WGS84).
+            Kết quả tự động chuyển đổi theo kinh tuyến trục đã chọn.
+          </p>
+
+          <div class="flex gap-8" style="margin-bottom:8px">
+            <button id="import-csv-btn" class="btn btn-primary" style="flex:1">
+              📂 Import CSV
+            </button>
+            <button id="export-csv-btn" class="btn btn-secondary" style="flex:1">
+              💾 Export CSV
+            </button>
+          </div>
+
+          <button id="download-template-btn" class="btn btn-ghost btn-full">
+            📄 Tải file mẫu (.csv)
+          </button>
+
+          <input type="file" id="csv-file-input" accept=".csv,.txt" class="hidden" />
+        </div>
+
+        <!-- Batch result table -->
+        <div class="batch-table-wrap" style="margin-top:8px">
+          <table id="batch-table" class="batch-table">
+            <thead>
+              <tr>
+                <th>STT</th>
+                <th>X (VN2000)</th>
+                <th>Y (VN2000)</th>
+                <th>Lat (WGS84)</th>
+                <th>Lon (WGS84)</th>
+                <th>Ghi chú</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="6" style="text-align:center; color:var(--text-muted); padding:24px">
+                  Chưa có dữ liệu. Import file CSV để bắt đầu.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══ TAB: SỔ ĐỎ ══ -->
+      <div id="tab-sodo" class="tab-content" role="tabpanel">
+
+        <div class="card">
+          <div class="card-title">🏘️ Vẽ thửa đất từ Sổ Đỏ</div>
+          <p class="text-sm text-muted" style="margin-bottom:12px;line-height:1.6">
+            Nhập các điểm góc thửa đất (tọa độ VN2000 từ sổ đỏ/bản đồ địa chính).
+            Hệ thống sẽ vẽ thửa và tính diện tích, chu vi.
+          </p>
+
+          <div class="form-group">
+            <label for="sodo-province">Tỉnh / Thành phố (chọn để lấy KTT)</label>
+            <select id="sodo-province">
+              <option value="">-- Chọn tỉnh/thành phố --</option>
+            </select>
+          </div>
+
+          <div id="sodo-ktt-display" class="ktt-display" style="display:none">
+            🎯 <span id="sodo-ktt-text">KTT: —</span>
+          </div>
+
+          <div class="form-group">
+            <label for="sodo-label">Tên thửa / Số thửa</label>
+            <input type="text" id="sodo-label" class="input-field"
+              placeholder="Vd: Thửa 52, Tờ bản đồ 15" />
+          </div>
+        </div>
+
+        <!-- Danh sách điểm góc -->
+        <div class="card">
+          <div class="card-title" style="justify-content:space-between">
+            <span>📍 Điểm góc (VN2000)</span>
+            <button id="sodo-add-point" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">➕ Thêm điểm</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;line-height:1.6;padding:6px 8px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border)">
+            💡 Quy ước sổ đỏ VN: <b>cột X = Northing</b> (số lớn, VD: 2.363.228)
+            &nbsp;&nbsp;│&nbsp;&nbsp; <b>cột Y = Easting</b> (số nhỏ, VD: 520.031)
+          </div>
+
+          <div id="sodo-points-list"></div>
+        </div>
+
+        <div class="flex gap-8" style="margin-bottom:12px">
+          <button id="sodo-draw-btn" class="btn btn-primary" style="flex:1">🔺 Vẽ thửa đất</button>
+          <button id="sodo-clear-btn" class="btn btn-secondary">🗑️ Xóa</button>
+        </div>
+
+        <!-- Kết quả -->
+        <div id="sodo-result" class="hidden">
+          <div class="result-card">
+            <div class="result-title">📊 Thông tin thửa đất</div>
+            <div class="result-row">
+              <span class="result-label">Diện tích</span>
+              <span class="result-value" id="sodo-area">—</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Chu vi</span>
+              <span class="result-value" id="sodo-perimeter">—</span>
+            </div>
+            <div id="sodo-edges" style="margin-top:8px;font-size:12px;color:var(--text-secondary)"></div>
+            <button id="sodo-copy-btn" class="btn btn-ghost btn-full" style="margin-top:10px">📋 Sao chép kết quả</button>
+          </div>
+        </div>
+
+      </div>
+      <!-- END TAB: SỔ ĐỎ -->
+
+      <!-- ══ TAB: HISTORY ══ -->
+      <div id="tab-history" class="tab-content" role="tabpanel">
+        <div class="flex" style="justify-content:space-between; align-items:center; margin-bottom:12px">
+          <span class="card-title" style="margin:0">🕒 Lịch sử chuyển đổi</span>
+          <button id="clear-history-btn" class="btn btn-ghost" style="font-size:11px">
+            🗑️ Xóa tất cả
+          </button>
+        </div>
+        <div id="history-list">
+          <div class="history-empty">Chưa có lịch sử chuyển đổi</div>
+        </div>
+      </div>
+
+      <!-- ══ TAB: TOOLS ══ -->
+      <div id="tab-tools" class="tab-content" role="tabpanel">
+
+        <!-- Geocoding -->
+        <div class="card">
+          <div class="card-title">🔍 Tìm kiếm địa điểm</div>
+          <div class="search-group">
+            <input type="text" id="geocode-input" class="input-field"
+              placeholder="Nhập tên địa điểm, xã/phường..." />
+            <button id="geocode-btn" class="btn btn-secondary btn-icon">🔍</button>
+          </div>
+          <ul id="geocode-results" class="geocode-results hidden"></ul>
+        </div>
+
+        <!-- Đo khoảng cách -->
+        <div class="card">
+          <div class="card-title">📏 Đo khoảng cách & Diện tích</div>
+          <p class="text-sm text-muted" style="margin-bottom:10px; line-height:1.6">
+            Bật chế độ đo, sau đó click các điểm trên bản đồ.
+            Cần ≥3 điểm để tính diện tích.
+          </p>
+          <div class="flex gap-8">
+            <button id="measure-btn" class="btn btn-secondary" style="flex:1">
+              📏 Đo khoảng cách
+            </button>
+            <button id="clear-measure-btn" class="btn btn-ghost">
+              🗑️ Xóa
+            </button>
+          </div>
+        </div>
+
+        <!-- Thông tin thư viện -->
+        <div class="card">
+          <div class="card-title">📚 Thư viện & Nguồn dữ liệu</div>
+          <div class="text-sm" style="line-height:1.9; color:var(--text-secondary)">
+            <div>🌐 <b>proj4.js</b> — Chuyển đổi tọa độ</div>
+            <div>🗺️ <b>Leaflet.js</b> — Bản đồ tương tác</div>
+            <div>📐 <b>Turf.js</b> — Tính diện tích</div>
+            <div>📊 <b>PapaParse</b> — Xử lý CSV</div>
+            <div class="divider"></div>
+            <div>📋 Tỉnh/thành: <a href="https://github.com/ThangLeQuoc/VietnameseProvincesDatabase" target="_blank" rel="noopener" class="text-accent">ThangLeQuoc/VN-Provinces</a></div>
+            <div>⚙️ Tham số VN2000: Bộ TNMT VN (towgs84)</div>
+            <div>📜 Nghị quyết: <b>19/2025/QĐ-TTg</b></div>
+          </div>
+        </div>
+
+        <!-- Bảng kinh tuyến trục -->
+        <div class="card">
+          <div class="card-title">🎯 Kinh tuyến trục tham chiếu</div>
+          <div style="overflow-x:auto">
+            <table class="batch-table" style="font-size:11px">
+              <thead>
+                <tr><th>KTT (°)</th><th>Tỉnh/Thành áp dụng</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>103.00</td><td>Lai Châu, Điện Biên</td></tr>
+                <tr><td>104.00</td><td>Sơn La</td></tr>
+                <tr><td>104.75</td><td>Lào Cai, Nghệ An, Phú Thọ, An Giang</td></tr>
+                <tr><td>105.00</td><td>Hà Nội, Thanh Hóa, Ninh Bình, Cần Thơ, Đồng Tháp, Cà Mau</td></tr>
+                <tr><td>105.50</td><td>Hưng Yên, Hà Tĩnh, Vĩnh Long</td></tr>
+                <tr><td>105.75</td><td>Cao Bằng, Hải Phòng, TP.HCM, Tây Ninh</td></tr>
+                <tr><td>106.00</td><td>Quảng Trị, Tuyên Quang</td></tr>
+                <tr><td>107.00</td><td>Bắc Ninh, Huế, Lạng Sơn</td></tr>
+                <tr><td>107.75</td><td>Quảng Ninh, Đà Nẵng, Đồng Nai, Lâm Đồng</td></tr>
+                <tr><td>108.00</td><td>Quảng Ngãi</td></tr>
+                <tr><td>108.25</td><td>Gia Lai, Khánh Hòa</td></tr>
+                <tr><td>108.50</td><td>Đắk Lắk</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+      <!-- END TABS -->
+
+    </aside>
+
+    <!-- ─────── MAP SECTION (RIGHT) ─────── -->
+    <section class="map-wrapper" aria-label="Bản đồ tương tác">
+      <div id="map-container" role="application" aria-label="Bản đồ Việt Nam tương tác"></div>
+      <div class="map-overlay-hint">🖱️ Click vào bản đồ để lấy tọa độ</div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════════ FOOTER ═══════════════ -->
+  <footer class="app-footer">
+    <span>VN2000 Web — Tọa độ Việt Nam 2025 &nbsp;|&nbsp;</span>
+    <span>Dữ liệu tỉnh thành: <a href="https://github.com/ThangLeQuoc/VietnameseProvincesDatabase" target="_blank" rel="noopener">thanglequoc/vietnamese-provinces-database</a></span>
+    <span> &nbsp;|&nbsp; Tham số: Bộ TN&MT VN</span>
+  </footer>
+
+</div><!-- end #app -->
+
+<!-- ═══════════════ SCRIPTS ═══════════════ -->
+
+<!-- Leaflet JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<!-- proj4.js — Chuyển đổi hệ tọa độ VN2000/WGS84 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
+
+<!-- Turf.js — Tính khoảng cách, diện tích không gian -->
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+<!-- PapaParse — Đọc/ghi CSV -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+<!-- App scripts (load order matters) -->
+<script src="js/provinces.js"></script>
+<script src="js/converter.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/map.js"></script>
+<script src="js/main.js"></script>
+
+</body>
+</html>
