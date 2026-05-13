@@ -124,6 +124,7 @@ function bindEvents() {
   $('import-csv-btn') && $('import-csv-btn').addEventListener('click', function(){ $('csv-file-input').click(); });
   $('csv-file-input') && $('csv-file-input').addEventListener('change', onCSVImport);
   $('export-csv-btn') && $('export-csv-btn').addEventListener('click', onCSVExport);
+  $('export-kml-batch-btn') && $('export-kml-batch-btn').addEventListener('click', onKmlExportBatch);
   $('download-template-btn') && $('download-template-btn').addEventListener('click', downloadCSVTemplate);
 
   document.querySelectorAll('[data-tab]').forEach(function(btn){
@@ -134,8 +135,9 @@ function bindEvents() {
   initSoDo();
   $('sodo-add-point')  && $('sodo-add-point').addEventListener('click', addSoDoPoint);
   $('sodo-draw-btn')   && $('sodo-draw-btn').addEventListener('click', drawSoDo);
-  $('sodo-clear-btn')  && $('sodo-clear-btn').addEventListener('click', function(){ clearSoDo(); showToast('Dã xóa thửa đất','info'); });
+  $('sodo-clear-btn')  && $('sodo-clear-btn').addEventListener('click', function(){ clearSoDo(); showToast('Đã xóa thửa đất','info'); });
   $('sodo-copy-btn')   && $('sodo-copy-btn').addEventListener('click', copySoDoResult);
+  $('sodo-kml-btn')    && $('sodo-kml-btn').addEventListener('click', onKmlExportSodo);
   $('sodo-province')   && $('sodo-province').addEventListener('change', onSoDoProvinceChange);
   /* Sync province selection from main tab to sodo tab */
   $('province-select') && $('province-select').addEventListener('change', function() {
@@ -369,7 +371,54 @@ function onCSVExport() {
   exportCSV(state.batchResults, 'vn2000_ket_qua.csv');
 }
 
-/* ── TABS ── */
+function onKmlExportBatch() {
+  if (!state.batchResults || !state.batchResults.length) {
+    showToast('Không có dữ liệu để xuất KML', 'warning');
+    return;
+  }
+  var features = state.batchResults.map(function(r, i) {
+    return {
+      type: 'point',
+      lat: r.lat,
+      lon: r.lon,
+      name: r.note || ('Điểm ' + (i+1)),
+      desc: 'VN2000 X: ' + (r.x||'') + '<br>VN2000 Y: ' + (r.y||'')
+    };
+  });
+  exportKML(features, 'vn2000_points.kml');
+}
+
+function onKmlExportSodo() {
+  if (!state.currentSoDoResult || !state.currentSoDoResult.points || state.currentSoDoResult.points.length < 3) {
+    showToast('Vui lòng vẽ thửa đất (tối thiểu 3 điểm) trước', 'warning');
+    return;
+  }
+  var r = state.currentSoDoResult;
+  var features = [];
+  
+  // 1. Add polygon
+  features.push({
+    type: 'polygon',
+    points: r.points.map(function(p){ return {lat: p.lat, lon: p.lon}; }),
+    name: $('sodo-label') ? ($('sodo-label').value || 'Thửa đất') : 'Thửa đất',
+    desc: 'Diện tích: ' + r.area.toFixed(2) + ' m²<br>Chu vi: ' + r.perimeter.toFixed(2) + ' m'
+  });
+  
+  // 2. Add individual points
+  r.points.forEach(function(p, i) {
+    features.push({
+      type: 'point',
+      lat: p.lat,
+      lon: p.lon,
+      name: 'Điểm ' + (i+1),
+      desc: 'X: ' + p.x + '<br>Y: ' + p.y
+    });
+  });
+  
+  exportKML(features, 'vn2000_sodo.kml');
+}
+
+/* ── SỔ ĐỎ (LAND PLOT) ── */
 function switchTab(id) {
   document.querySelectorAll('.tab-content').forEach(function(el){ el.classList.remove('active'); });
   document.querySelectorAll('[data-tab]').forEach(function(btn){ btn.classList.remove('active'); });

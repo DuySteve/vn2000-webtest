@@ -125,6 +125,43 @@ function downloadCSVTemplate() {
   URL.revokeObjectURL(url);
 }
 
+/* ── KML EXPORT ── */
+function exportKML(features, filename) {
+  filename = filename || 'vn2000_export.kml';
+  var kml = ['<?xml version="1.0" encoding="UTF-8"?>'];
+  kml.push('<kml xmlns="http://www.opengis.net/kml/2.2">');
+  kml.push('  <Document>');
+  kml.push('    <name>'+filename+'</name>');
+  
+  features.forEach(function(f, i) {
+    kml.push('    <Placemark>');
+    kml.push('      <name>'+(f.name || 'Điểm ' + (i+1))+'</name>');
+    if (f.desc) kml.push('      <description><![CDATA['+f.desc+']]></description>');
+    
+    if (f.type === 'polygon' && f.points && f.points.length >= 3) {
+      kml.push('      <Polygon><outerBoundaryIs><LinearRing><coordinates>');
+      var coords = f.points.map(function(p){ return p.lon+','+p.lat+',0'; }).join(' ');
+      // Close polygon
+      coords += ' ' + f.points[0].lon+','+f.points[0].lat+',0';
+      kml.push('        ' + coords);
+      kml.push('      </coordinates></LinearRing></outerBoundaryIs></Polygon>');
+    } else {
+      kml.push('      <Point><coordinates>'+f.lon+','+f.lat+',0</coordinates></Point>');
+    }
+    kml.push('    </Placemark>');
+  });
+  
+  kml.push('  </Document>');
+  kml.push('</kml>');
+  
+  var blob = new Blob([kml.join('\n')], {type:'application/vnd.google-earth.kml+xml;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Đã xuất file KML','success');
+}
+
 /* ── DEBOUNCE ── */
 function debounce(fn, delay) {
   var t; return function(){

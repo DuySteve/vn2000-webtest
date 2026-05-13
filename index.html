@@ -7,12 +7,24 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#0d1117" />
+  <link rel="manifest" href="./manifest.json" />
   <title>VN2000 Web — Chuyển đổi tọa độ Việt Nam</title>
   <meta name="description" content="Công cụ chuyển đổi tọa độ VN2000 ↔ WGS84 trực tuyến. Hỗ trợ 34 tỉnh/thành sau sáp nhập 2025, múi chiếu TM-3 và UTM, bản đồ tương tác Leaflet." />
   <meta name="keywords" content="VN2000, tọa độ, WGS84, chuyển đổi tọa độ, proj4, bản đồ Việt Nam, kinh tuyến trục, GPS" />
   <meta property="og:title" content="VN2000 Web — Chuyển đổi tọa độ Việt Nam" />
   <meta property="og:description" content="Công cụ chuyển đổi tọa độ VN2000 ↔ WGS84 chính xác theo tham số Bộ TNMT" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').then(function(registration) {
+          console.log('SW registered with scope:', registration.scope);
+        }).catch(function(err) {
+          console.log('SW registration failed:', err);
+        });
+      });
+    }
+  </script>
 
   <!-- CSS -->
   <link rel="stylesheet" href="css/style.css" />
@@ -275,9 +287,14 @@
             </button>
           </div>
 
-          <button id="download-template-btn" class="btn btn-ghost btn-full">
-            📄 Tải file mẫu (.csv)
-          </button>
+          <div class="flex gap-8" style="margin-bottom:8px">
+            <button id="export-kml-batch-btn" class="btn btn-secondary" style="flex:1">
+              🌍 Xuất KML (Google Earth)
+            </button>
+            <button id="download-template-btn" class="btn btn-ghost" style="flex:1">
+              📄 Tải file mẫu (.csv)
+            </button>
+          </div>
 
           <input type="file" id="csv-file-input" accept=".csv,.txt" class="hidden" />
         </div>
@@ -366,7 +383,10 @@
               <span class="result-value" id="sodo-perimeter">—</span>
             </div>
             <div id="sodo-edges" style="margin-top:8px;font-size:12px;color:var(--text-secondary)"></div>
-            <button id="sodo-copy-btn" class="btn btn-ghost btn-full" style="margin-top:10px">📋 Sao chép kết quả</button>
+            <div class="flex gap-8" style="margin-top:10px">
+              <button id="sodo-copy-btn" class="btn btn-ghost" style="flex:1">📋 Copy kết quả</button>
+              <button id="sodo-kml-btn" class="btn btn-secondary" style="flex:1; border-color:var(--accent); color:var(--accent)">🌍 Tải file KML</button>
+            </div>
           </div>
         </div>
 
