@@ -807,31 +807,6 @@ select option { background: var(--bg-input); color: var(--text-primary); }
 .font-mono { font-family: 'JetBrains Mono', monospace; }
 .w-full { width: 100%; }
 
-/* ── Responsive ──────────────────────────────────────────── */
-@media (max-width: 900px) {
-  .control-panel {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    max-height: 55vh;
-  }
-
-  #map-container { min-height: 45vh; }
-
-  .main-content {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-  }
-
-  .app-header { padding: 12px 16px; }
-  .logo-title { font-size: 16px; }
-}
-
-@media (max-width: 480px) {
-  .result-actions { flex-direction: column; }
-  .zone-radio-group { flex-direction: column; }
-  .header-badge { display: none; }
-}
-
 /* ── Sổ Đỏ Land Plot ─────────────────────────── */
 .sodo-point-row {
   display: flex;
@@ -884,3 +859,195 @@ select option { background: var(--bg-input); color: var(--text-primary); }
   color: var(--danger);
 }
 
+/* ── Panel Handle (mobile drag indicator) ────── */
+.panel-handle {
+  display: none;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0 4px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.panel-handle-bar {
+  width: 40px;
+  height: 4px;
+  background: var(--text-muted);
+  border-radius: 2px;
+  opacity: 0.5;
+}
+
+/* ── FAB Button (mobile only) ────────────────── */
+.fab-btn {
+  display: none;
+  position: absolute;
+  bottom: 80px;
+  right: 16px;
+  width: 52px; height: 52px;
+  background: linear-gradient(135deg, var(--accent), #00b084);
+  border: none;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0,200,150,0.45);
+  z-index: 600;
+  transition: all var(--transition);
+  align-items: center;
+  justify-content: center;
+}
+
+.fab-btn:active { transform: scale(0.92); }
+
+/* ══════════════════════════════════════════════
+   DESKTOP Responsive (900px)
+══════════════════════════════════════════════ */
+@media (max-width: 900px) and (min-width: 601px) {
+  .main-content {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .control-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  #map-container { min-height: 50vh; }
+  .app-header { padding: 12px 16px; }
+  .logo-title { font-size: 16px; }
+}
+
+/* ══════════════════════════════════════════════
+   MOBILE (≤600px) — Bottom Sheet Layout
+══════════════════════════════════════════════ */
+@media (max-width: 600px) {
+
+  /* App fills full viewport */
+  .app-container {
+    grid-template-rows: 52px 1fr 0;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Compact header */
+  .app-header {
+    padding: 8px 14px;
+    height: 52px;
+  }
+  .logo-title  { font-size: 15px; }
+  .logo-subtitle { display: none; }
+  .header-badge  { display: none; }
+  .logo-icon { width: 32px; height: 32px; font-size: 17px; }
+
+  /* Footer hidden on mobile */
+  .app-footer { display: none; }
+
+  /* Main = full screen */
+  .main-content {
+    display: block;
+    position: relative;
+    height: calc(100vh - 52px);
+  }
+
+  /* Map: fills entire screen */
+  .map-wrapper {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+  #map-container {
+    width: 100%;
+    height: 100%;
+    min-height: unset;
+  }
+
+  /* ── Bottom Sheet Panel ── */
+  .control-panel {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    z-index: 200;
+    border-radius: 20px 20px 0 0;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 30px rgba(0,0,0,0.4);
+    /* Collapsed: show only handle + tabs (~108px) */
+    height: 108px;
+    max-height: 88vh;
+    overflow: hidden;
+    transition: height 0.35s cubic-bezier(0.4,0,0.2,1);
+    will-change: height;
+  }
+
+  .control-panel.expanded {
+    height: 88vh;
+    overflow-y: auto;
+  }
+
+  /* Show drag handle on mobile */
+  .panel-handle {
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  /* Tabs: scrollable horizontal */
+  .panel-tabs {
+    padding: 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+  }
+  .panel-tabs::-webkit-scrollbar { display: none; }
+
+  .tab-btn {
+    padding: 10px 12px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    /* Touch target min 44px */
+    min-height: 44px;
+  }
+
+  /* FAB button visible on mobile */
+  .fab-btn { display: flex; }
+
+  /* Prevent iOS zoom on input focus: font-size >= 16px */
+  .input-field,
+  select {
+    font-size: 16px !important;
+  }
+  .input-mono {
+    font-size: 15px !important;
+  }
+  .sodo-point-inputs .input-field {
+    font-size: 14px !important;
+  }
+
+  /* Bigger touch targets for buttons */
+  .btn {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+  .btn-icon {
+    width: 44px; height: 44px;
+  }
+
+  /* Result actions stack vertically */
+  .result-actions { flex-direction: column; }
+  .result-actions .btn { width: 100%; }
+
+  /* Zone radio: row stays on mobile */
+  .zone-radio-group { flex-direction: row; }
+
+  /* Map hint: lower position so not behind FAB */
+  .map-overlay-hint {
+    bottom: 70px;
+    font-size: 11px;
+    padding: 5px 12px;
+  }
+
+  /* Sodo point inputs: stack on very small */
+  @media (max-width: 380px) {
+    .sodo-point-inputs { flex-direction: column; gap: 4px; }
+  }
+}

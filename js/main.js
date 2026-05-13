@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
   renderHistory();
   handleShareURL();
   document.querySelector('.app-container').classList.add('entrance');
+  initMobilePanel();
 });
 
 /* ── THEME ── */
@@ -551,3 +552,68 @@ function copySoDoResult() {
   copyToClipboard(lines.join('\n'),'📋 Đã sao chép thông tin thửa đất');
 }
 
+/* ═══════════════════════════════════════════════
+   MOBILE BOTTOM SHEET
+   ═══════════════════════════════════════════════ */
+function initMobilePanel() {
+  var panel  = $('control-panel');
+  var handle = $('panel-handle');
+  var fab    = $('fab-panel-btn');
+  var fabIcon = $('fab-icon');
+  if (!panel) return;
+
+  var _expanded = false;
+
+  function setExpanded(v, smooth) {
+    _expanded = v;
+    if (v) {
+      panel.classList.add('expanded');
+    } else {
+      panel.classList.remove('expanded');
+    }
+    if (fabIcon) fabIcon.textContent = v ? '🗺️' : '📋';
+  }
+
+  /* FAB click: toggle */
+  if (fab) {
+    fab.addEventListener('click', function(e) {
+      e.stopPropagation();
+      setExpanded(!_expanded);
+    });
+  }
+
+  /* Handle click: toggle */
+  if (handle) {
+    handle.addEventListener('click', function() {
+      setExpanded(!_expanded);
+    });
+  }
+
+  /* Swipe up / down on handle */
+  var _touchStartY = 0;
+  if (handle) {
+    handle.addEventListener('touchstart', function(e) {
+      _touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    handle.addEventListener('touchend', function(e) {
+      var dy = _touchStartY - e.changedTouches[0].clientY;
+      if (dy > 30)  setExpanded(true);   /* swipe up → expand */
+      if (dy < -30) setExpanded(false);  /* swipe down → collapse */
+    }, { passive: true });
+  }
+
+  /* Map click → collapse panel (only on mobile) */
+  var origOnMapClick = onMapClick;
+  onMapClick = function(lat, lon) {
+    if (window.innerWidth <= 600) setExpanded(false);
+    origOnMapClick(lat, lon);
+  };
+
+  /* After convert → auto-expand to show result */
+  var origDoConvert = doConvert;
+  doConvert = function() {
+    origDoConvert();
+    if (window.innerWidth <= 600) setExpanded(true);
+  };
+}

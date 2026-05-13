@@ -2,7 +2,11 @@
 <html lang="vi" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0d1117" />
   <title>VN2000 Web — Chuyển đổi tọa độ Việt Nam</title>
   <meta name="description" content="Công cụ chuyển đổi tọa độ VN2000 ↔ WGS84 trực tuyến. Hỗ trợ 34 tỉnh/thành sau sáp nhập 2025, múi chiếu TM-3 và UTM, bản đồ tương tác Leaflet." />
   <meta name="keywords" content="VN2000, tọa độ, WGS84, chuyển đổi tọa độ, proj4, bản đồ Việt Nam, kinh tuyến trục, GPS" />
@@ -43,8 +47,12 @@
   <!-- ═══════════════ MAIN ═══════════════ -->
   <main class="main-content">
 
-    <!-- ─────── CONTROL PANEL (LEFT) ─────── -->
-    <aside class="control-panel">
+    <!-- ─────── CONTROL PANEL (LEFT / BOTTOM SHEET on mobile) ─────── -->
+    <aside class="control-panel" id="control-panel">
+      <!-- Mobile drag handle -->
+      <div class="panel-handle" id="panel-handle">
+        <div class="panel-handle-bar"></div>
+      </div>
 
       <!-- Panel Tabs -->
       <nav class="panel-tabs" role="tablist">
@@ -458,7 +466,12 @@
     <!-- ─────── MAP SECTION (RIGHT) ─────── -->
     <section class="map-wrapper" aria-label="Bản đồ tương tác">
       <div id="map-container" role="application" aria-label="Bản đồ Việt Nam tương tác"></div>
-      <div class="map-overlay-hint">🖱️ Click vào bản đồ để lấy tọa độ</div>
+      <div class="map-overlay-hint" id="map-hint">🖱️ Click vào bản đồ để lấy tọa độ</div>
+
+      <!-- FAB: mobile quick panel toggle -->
+      <button id="fab-panel-btn" class="fab-btn" title="Mở/đóng panel">
+        <span id="fab-icon">📋</span>
+      </button>
     </section>
 
   </main>
