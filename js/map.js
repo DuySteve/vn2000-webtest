@@ -129,16 +129,21 @@ function _addMeasurePoint(lat,lon) {
 /* ─── LAND PLOT (SỔ ĐỎ) ────────────────────────────────── */
 function drawLandPlot(wgs84Points, label) {
   clearLandPlot();
-  if (wgs84Points.length < 3) { showToast('Cần ít nhất 3 điểm để vẽ thửa đất','warning'); return null; }
+  if (wgs84Points.length === 0) { showToast('Cần ít nhất 1 điểm để hiển thị trên bản đồ','warning'); return null; }
 
   var latlngs = wgs84Points.map(function(p){return [p.lat,p.lon];});
 
-  /* Polygon */
-  var polygon = L.polygon(latlngs, {
-    color:'#FF6B35', weight:2.5, opacity:1,
-    fillColor:'#FF6B35', fillOpacity:0.15
-  }).addTo(_map);
-  _plotLayer = polygon;
+  /* Vẽ hình (Polygon / Polyline / None) */
+  if (wgs84Points.length >= 3) {
+    _plotLayer = L.polygon(latlngs, {
+      color:'#FF6B35', weight:2.5, opacity:1,
+      fillColor:'#FF6B35', fillOpacity:0.15
+    }).addTo(_map);
+  } else if (wgs84Points.length === 2) {
+    _plotLayer = L.polyline(latlngs, {
+      color:'#FF6B35', weight:2.5, opacity:1
+    }).addTo(_map);
+  }
 
   /* Corner markers */
   wgs84Points.forEach(function(p,i){
@@ -161,35 +166,47 @@ function drawLandPlot(wgs84Points, label) {
   });
 
   /* Area & perimeter */
-  var coords=wgs84Points.map(function(p){return[p.lon,p.lat];}); coords.push(coords[0]);
-  var area=0, perimeter=0;
-  if(typeof turf!=='undefined'){
-    try{ area=turf.area(turf.polygon([coords])); }catch(e){}
-  }
-  var edgeLengths=[];
-  for(var i=0;i<wgs84Points.length;i++){
-    var next=(i+1)%wgs84Points.length;
-    var d=haversineDistance(wgs84Points[i].lat,wgs84Points[i].lon,wgs84Points[next].lat,wgs84Points[next].lon);
-    perimeter+=d; edgeLengths.push(d);
+  var area=0, perimeter=0, edgeLengths=[];
+  
+  if (wgs84Points.length >= 2) {
+    for(var i=0; i<wgs84Points.length; i++){
+      if (wgs84Points.length === 2 && i === 1) break; // Chỉ có 1 cạnh nếu 2 điểm
+      var next = (i+1) % wgs84Points.length;
+      var d = haversineDistance(wgs84Points[i].lat, wgs84Points[i].lon, wgs84Points[next].lat, wgs84Points[next].lon);
+      perimeter += d; 
+      edgeLengths.push(d);
+    }
   }
 
-  /* Centroid label */
-  try{
-    var centroid=turf.centroid(turf.polygon([coords]));
-    var clat=centroid.geometry.coordinates[1], clon=centroid.geometry.coordinates[0];
-    var areaText=area<10000?formatCoordNum(area,2)+' m²':formatCoordNum(area/10000,4)+' ha';
-    var labelIcon=L.divIcon({
-      className:'',
-      html:'<div style="background:rgba(255,107,53,.9);color:#fff;padding:5px 10px;border-radius:6px;'+
-           'font-size:12px;font-weight:700;font-family:Inter,sans-serif;white-space:nowrap;'+
-           'border:1px solid rgba(255,255,255,.5);box-shadow:0 2px 8px rgba(0,0,0,.4);text-align:center">'+
-           (label?'<div>'+label+'</div>':'')+'<div>📐 '+areaText+'</div></div>',
-      iconAnchor:[60,20]
-    });
-    _plotMarkers.push(L.marker([clat,clon],{icon:labelIcon,zIndexOffset:500}).addTo(_map));
-  }catch(e){}
+  if (wgs84Points.length >= 3 && typeof turf !== 'undefined') {
+    var coords = wgs84Points.map(function(p){return[p.lon,p.lat];}); 
+    coords.push(coords[0]);
+    try { area = turf.area(turf.polygon([coords])); } catch(e){}
+    
+    /* Centroid label (chỉ cho polygon) */
+    try {
+      var centroid = turf.centroid(turf.polygon([coords]));
+      var clat = centroid.geometry.coordinates[1], clon = centroid.geometry.coordinates[0];
+      var areaText = area < 10000 ? formatCoordNum(area,2)+' m²' : formatCoordNum(area/10000,4)+' ha';
+      var labelIcon = L.divIcon({
+        className:'',
+        html:'<div style="background:rgba(255,107,53,.9);color:#fff;padding:5px 10px;border-radius:6px;'+
+             'font-size:12px;font-weight:700;font-family:Inter,sans-serif;white-space:nowrap;'+
+             'border:1px solid rgba(255,255,255,.5);box-shadow:0 2px 8px rgba(0,0,0,.4);text-align:center">'+
+             (label?'<div>'+label+'</div>':'')+'<div>📐 '+areaText+'</div></div>',
+        iconAnchor:[60,20]
+      });
+      _plotMarkers.push(L.marker([clat,clon],{icon:labelIcon,zIndexOffset:500}).addTo(_map));
+    } catch(e){}
+  }
 
-  _map.fitBounds(polygon.getBounds().pad(0.1));
+  // Zoom fit map
+  if (_plotLayer) {
+    _map.fitBounds(_plotLayer.getBounds().pad(0.1));
+  } else if (_plotMarkers.length > 0) {
+    _map.flyTo(_plotMarkers[0].getLatLng(), 16);
+  }
+  
   return { area:area, perimeter:perimeter, edgeLengths:edgeLengths };
 }
 

@@ -671,7 +671,7 @@ function drawSoDo() {
   });
 
   if(errors.length){ showToast(errors[0],'error'); return; }
-  if(wgs84Pts.length < 3){ showToast('Cần ít nhất 3 điểm hợp lệ','warning'); return; }
+  if(wgs84Pts.length < 1){ showToast('Chưa có điểm hợp lệ nào để hiển thị','warning'); return; }
 
   var label = ($('sodo-label') && $('sodo-label').value.trim()) || 'Thửa đất';
   var info = drawLandPlot(wgs84Pts, label);
