@@ -9,7 +9,8 @@
  *   - API key được bảo mật trong env, không lộ ra frontend
  */
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+// gemini-1.5-flash: quota ổn định hơn trên Google AI Studio so với 2.0-flash
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 export default {
   async fetch(request, env, ctx) {
