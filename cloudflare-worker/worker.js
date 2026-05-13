@@ -22,8 +22,8 @@ export default {
       const apiKey = env.GEMINI_API_KEY;
       if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on Cloudflare');
 
-      // Trở lại v1beta với model gemini-1.5-flash chuẩn (không có đuôi -8b hay -latest để đảm bảo tương thích 100%)
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      // Cập nhật model lên Gemini 2.5 Flash (Bản chuẩn của Google hiện tại, do các bản 1.5 đã bị Google khai tử)
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
       
       // Cắt bỏ phần header data:image/jpeg;base64,
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
