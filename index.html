@@ -351,14 +351,15 @@
           <div class="card-title" style="justify-content:space-between">
             <span>Điểm góc (VN2000)</span>
             <div class="flex gap-8">
-              <button id="sodo-ocr-btn" class="btn btn-secondary" style="font-size:11px;padding:4px 8px">Quét ảnh</button>
+              <button id="sodo-ocr-btn" class="btn btn-secondary" style="font-size:11px;padding:4px 8px"><span id="sodo-ocr-text">📷 Quét ảnh</span></button>
               <button id="sodo-add-point" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">Thêm điểm</button>
             </div>
             <input type="file" id="sodo-ocr-input" accept="image/*" class="hidden" />
           </div>
-          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;line-height:1.6;padding:6px 8px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border)">
-            Quy ước sổ đỏ VN: <b>cột X = Northing</b> (số lớn, VD: 2.363.228)
-            &nbsp;&nbsp;│&nbsp;&nbsp; <b>cột Y = Easting</b> (số nhỏ, VD: 520.031)
+          <div style="font-size:12px;color:var(--text-primary);margin-bottom:12px;line-height:1.6;padding:10px;background:var(--bg-input);border-radius:8px;border:1px dashed var(--accent);border-left:4px solid var(--accent);">
+            <div style="font-weight:600;margin-bottom:4px">💡 Hướng dẫn nhập / quét tọa độ Sổ Đỏ:</div>
+            • <b>Cột X</b> (Northing): Thường có 7 chữ số (Ví dụ: 2.363.228)<br/>
+            • <b>Cột Y</b> (Easting): Thường có 6 chữ số (Ví dụ: 520.031)
           </div>
 
           <div id="ocr-debug-container" style="display:none; margin-bottom: 12px;">

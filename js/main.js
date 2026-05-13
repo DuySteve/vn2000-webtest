@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', function() {
   initMap('map-container', onMapClick);
   document.querySelector('.app-container').classList.add('entrance');
   initMobilePanel();
+  // Auto-chọn Quảng Ninh (tỉnh ưu tiên) ngay khi tải trang
+  autoSelectProvince('22');
 });
 
 /* ── THEME ── */
@@ -39,6 +41,8 @@ function applyTheme(t) {
 /* ── PROVINCE SELECT ── */
 function populateProvinceSelect() {
   var targets = [$('province-select'), $('sodo-province')];
+  // Danh sách tỉnh ghim lên đầu (phục vụ chính tại Quảng Ninh)
+  var PINNED_CODES = ['22'];
   var regions = {};
   PROVINCES.forEach(function(p) {
     if (!regions[p.region]) regions[p.region] = [];
@@ -47,6 +51,24 @@ function populateProvinceSelect() {
   targets.forEach(function(sel) {
     if (!sel) return;
     sel.innerHTML = '<option value="">' + (sel.id==='sodo-province' ? '-- Chọn tỉnh/thành (lấy KTT) --' : '-- Chọn tỉnh/thành phố --') + '</option>';
+
+    // Nhóm ưu tiên (ghim đầu)
+    var pinnedProvinces = PROVINCES.filter(function(p) { return PINNED_CODES.indexOf(p.code) !== -1; });
+    if (pinnedProvinces.length > 0) {
+      var pinnedGrp = document.createElement('optgroup');
+      pinnedGrp.label = '⭐ Khu vực chính';
+      pinnedProvinces.forEach(function(p) {
+        var o = document.createElement('option');
+        o.value = p.code;
+        o.dataset.cm = p.cm;
+        o.dataset.utmZone = p.utmZone;
+        o.textContent = p.fullName + ' (•' + p.cm + '°)';
+        pinnedGrp.appendChild(o);
+      });
+      sel.appendChild(pinnedGrp);
+    }
+
+    // Các nhóm vùng miền còn lại
     Object.keys(regions).forEach(function(region) {
       var grp = document.createElement('optgroup');
       grp.label = region;
@@ -61,6 +83,14 @@ function populateProvinceSelect() {
       sel.appendChild(grp);
     });
   });
+}
+
+/** Tự động chọn tỉnh theo code và kích hoạt các side-effect */
+function autoSelectProvince(code) {
+  var selMain = $('province-select');
+  var selSodo = $('sodo-province');
+  if (selMain) { selMain.value = code; onProvinceChange(); }
+  if (selSodo) { selSodo.value = code; onSoDoProvinceChange(); }
 }
 
 /* ── EVENTS ── */
@@ -119,11 +149,16 @@ function bindEvents() {
   $('sodo-copy-btn')   && $('sodo-copy-btn').addEventListener('click', copySoDoResult);
   $('sodo-kml-btn')    && $('sodo-kml-btn').addEventListener('click', onKmlExportSodo);
   $('sodo-province')   && $('sodo-province').addEventListener('change', onSoDoProvinceChange);
-  /* Sync province selection from main tab to sodo tab */
+  /* Sync province selection: main ↔ sodo (hai chiều) */
   $('province-select') && $('province-select').addEventListener('change', function() {
     var sel = $('province-select'), sp = $('sodo-province');
     if (sel && sp && sel.value) sp.value = sel.value;
     onSoDoProvinceChange();
+  });
+  $('sodo-province') && $('sodo-province').addEventListener('change', function() {
+    var sel = $('province-select'), sp = $('sodo-province');
+    if (sel && sp && sp.value) sel.value = sp.value;
+    onProvinceChange();
   });
 }
 
@@ -438,6 +473,11 @@ async function onSoDoOcrUpload(e) {
   if (!file) return;
   e.target.value = ''; // reset
 
+  var btnText = $('sodo-ocr-text');
+  var btn = $('sodo-ocr-btn');
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.textContent = '⏳ Đang quét...';
+
   try {
     var processedImage = await preprocessImageForOCR(file);
 
@@ -499,6 +539,9 @@ async function onSoDoOcrUpload(e) {
   } catch (err) {
     console.error(err);
     showToast('Lỗi đọc ảnh: ' + err.message, 'error', 6000);
+  } finally {
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.textContent = '📷 Quét ảnh';
   }
 }
 
