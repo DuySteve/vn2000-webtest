@@ -195,6 +195,7 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   height: 100%;
+  min-height: 0;
 }
 
 /* ── Panel Tabs ──────────────────────────────────────────── */
@@ -732,6 +733,7 @@ select option { background: var(--bg-input); color: var(--text-primary); }
   position: relative;
   overflow: hidden;
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }

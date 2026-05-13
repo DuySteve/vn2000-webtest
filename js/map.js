@@ -49,6 +49,15 @@ function initMap(containerId, onMapClick) {
     placeMapMarker(e.latlng.lat, e.latlng.lng, null, null);
   });
 
+  /* Tự động báo cho Leaflet biết khi khung chứa bị thay đổi kích thước (Flex/Grid) */
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(function() {
+      if (_map) _map.invalidateSize();
+    });
+    var el = document.getElementById(containerId);
+    if (el) ro.observe(el);
+  }
+
   return _map;
 }
 
