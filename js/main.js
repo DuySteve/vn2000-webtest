@@ -456,8 +456,8 @@ function preprocessImageForOCR(file) {
       canvas.width = Math.floor(img.width * scale);
       canvas.height = Math.floor(img.height * scale);
 
-      // Ép tương phản cực mạnh để biến nền xám/bóng mờ thành trắng tinh, chữ thành đen
-      ctx.filter = 'grayscale(100%) contrast(400%) brightness(120%)';
+      // Giảm độ tương phản xuống mức cân bằng (180%) để không làm lóa/mất nét chữ khi chụp bị chói
+      ctx.filter = 'grayscale(100%) contrast(180%) brightness(105%)';
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       ctx.filter = 'none'; // reset
       
