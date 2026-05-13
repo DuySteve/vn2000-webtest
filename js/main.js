@@ -14,7 +14,7 @@ var state = {
 };
 
 // URL của Cloudflare Worker (Nếu có sẽ dùng AI Gemini siêu việt, nếu rỗng sẽ dùng Tesseract Offline)
-var OCR_API_URL = 'https://falling-cake-6be3.buibangduy15112004.workers.dev/'; 
+var OCR_API_URL = ''; 
 
 function $(id) { return document.getElementById(id); }
 

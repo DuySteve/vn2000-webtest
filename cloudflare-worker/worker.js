@@ -22,8 +22,8 @@ export default {
       const apiKey = env.GEMINI_API_KEY;
       if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on Cloudflare');
 
-      // API của Gemini 1.5 Flash (Xử lý ảnh cực nhanh và rẻ)
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      // Dùng bản Gemini 2.0 Flash (Bản mới nhất)
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
       
       // Cắt bỏ phần header data:image/jpeg;base64,
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
