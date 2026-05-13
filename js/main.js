@@ -398,21 +398,48 @@ function addSoDoPoint(xVal, yVal) {
 }
 
 /* ── SỔ ĐỎ OCR ── */
+function preprocessImageForOCR(file) {
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      var canvas = document.createElement('canvas');
+      var ctx = canvas.getContext('2d');
+      // Tăng kích thước ảnh để OCR dễ đọc hơn (đặc biệt khi chụp màn hình)
+      var scale = img.width < 1500 ? 2 : 1;
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      
+      // Tăng độ tương phản, chuyển trắng đen
+      ctx.filter = 'grayscale(100%) contrast(150%)';
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      resolve(canvas.toDataURL('image/jpeg', 0.9));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 async function onSoDoOcrUpload(e) {
   var file = e.target.files[0];
   if (!file) return;
   e.target.value = ''; // reset
 
-  showToast('Đang tải AI phân tích ảnh (15MB lần đầu)...', 'info', 4000);
+  showToast('Đang xử lý ảnh để tối ưu khả năng đọc...', 'info', 3000);
   try {
     if (!window.Tesseract) {
       showToast('Thư viện quét chữ chưa tải xong, vui lòng thử lại sau giây lát!', 'warning');
       return;
     }
     
+    var processedImage = await preprocessImageForOCR(file);
+
     showToast('Đang nhận dạng tọa độ... Vui lòng giữ mạng ổn định!', 'info', 5000);
-    var worker = await Tesseract.createWorker('vie');
-    var res = await worker.recognize(file);
+    // Sử dụng model 'eng' vì số liệu đọc bằng model tiếng Anh chuẩn xác hơn rất nhiều so với 'vie'
+    var worker = await Tesseract.createWorker('eng');
+    var res = await worker.recognize(processedImage);
     await worker.terminate();
 
     var text = res.data.text;
@@ -424,36 +451,76 @@ async function onSoDoOcrUpload(e) {
 }
 
 function parseOcrText(text) {
-  var lines = text.split('\n');
+  // Thay thế dấu phẩy bằng dấu chấm, và thay thế chữ 'o'/'O' thành '0'
+  var cleanText = text.replace(/,/g, '.').replace(/[oO]/g, '0');
+  
+  // Nối các chữ số bị ngăn cách bởi khoảng trắng (ví dụ: "2 363 228" -> "2363228")
+  cleanText = cleanText.replace(/(\d)\s+(?=\d{3}\b)/g, '$1');
+
+  var regex = /\b\d{5,8}(?:\.\d{1,4})?\b/g;
+  var matches = cleanText.match(regex) || [];
+  
+  var xs = [];
+  var ys = [];
+  
+  matches.forEach(function(m) {
+    var val = parseFloat(m);
+    if (val >= 800000 && val <= 3000000) xs.push(val);
+    else if (val >= 100000 && val <= 900000) ys.push(val);
+  });
+
   var foundPoints = [];
-
+  
+  // Cách 1: Thử parse theo dòng trước
+  var lines = cleanText.split('\n');
+  var pairedByLine = [];
   lines.forEach(function(line) {
-    var cleanLine = line.replace(/,/g, '.').replace(/\s+/g, ' ');
-    var regex = /\b\d{5,7}(?:\.\d{1,3})?\b/g;
-    var matches = cleanLine.match(regex);
-    if (matches && matches.length >= 2) {
-      var n1 = parseFloat(matches[0]);
-      var n2 = parseFloat(matches[1]);
-      var x, y;
-      if (n1 > 800000 && n1 < 3000000) { x = n1; y = n2; }
-      else if (n2 > 800000 && n2 < 3000000) { x = n2; y = n1; }
-      else { x = Math.max(n1, n2); y = Math.min(n1, n2); }
+    var lineMatches = line.match(regex) || [];
+    var lxs = [], lys = [];
+    lineMatches.forEach(function(m) {
+      var val = parseFloat(m);
+      if (val >= 800000 && val <= 3000000) lxs.push(val);
+      else if (val >= 100000 && val <= 900000) lys.push(val);
+    });
+    // Nếu dòng có 1 X và 1 Y -> Cặp chuẩn
+    if (lxs.length === 1 && lys.length === 1) {
+      pairedByLine.push({ x: lxs[0], y: lys[0] });
+    } else if (lxs.length > 0 && lxs.length === lys.length) {
+      for(var i=0; i<lxs.length; i++) pairedByLine.push({x: lxs[i], y: lys[i]});
+    }
+  });
 
-      // Validate range
-      if (x > 800000 && x < 3000000 && y > 100000 && y < 900000) {
-        foundPoints.push({ x: x, y: y });
+  if (pairedByLine.length >= 3 && pairedByLine.length >= Math.min(xs.length, ys.length) * 0.5) {
+    foundPoints = pairedByLine;
+  } else {
+    // Cách 2: Nếu OCR đọc theo cột (bảng), ghép X và Y theo thứ tự
+    var count = Math.min(xs.length, ys.length);
+    for (var j = 0; j < count; j++) {
+      foundPoints.push({ x: xs[j], y: ys[j] });
+    }
+  }
+
+  // Loại bỏ các điểm trùng lặp liên tiếp
+  var uniquePoints = [];
+  foundPoints.forEach(function(p) {
+    if (uniquePoints.length === 0) {
+      uniquePoints.push(p);
+    } else {
+      var last = uniquePoints[uniquePoints.length - 1];
+      if (Math.abs(last.x - p.x) > 0.01 || Math.abs(last.y - p.y) > 0.01) {
+        uniquePoints.push(p);
       }
     }
   });
 
-  if (foundPoints.length === 0) {
-    showToast('Không quét được tọa độ hợp lệ. Vui lòng chụp rõ nét hơn hoặc chụp thẳng góc vào bảng tọa độ!', 'warning', 6000);
+  if (uniquePoints.length === 0) {
+    showToast('Không quét được tọa độ hợp lệ. Hãy chụp rõ nét hơn, tránh bị chói sáng!', 'warning', 7000);
   } else {
-    showToast('Đã nhận diện thành công ' + foundPoints.length + ' điểm tọa độ!', 'success');
+    showToast('Đã nhận diện thành công ' + uniquePoints.length + ' điểm tọa độ!', 'success', 5000);
     var list = $('sodo-points-list');
     if (list) list.innerHTML = '';
     _soDoPointCount = 0;
-    foundPoints.forEach(function(p) {
+    uniquePoints.forEach(function(p) {
       addSoDoPoint(p.x, p.y);
     });
     drawSoDo();
