@@ -31,7 +31,7 @@ function initMap(containerId, onMapClick) {
     attribution:'© OpenStreetMap', maxZoom:22, maxNativeZoom:19
   });
 
-  gRoad.addTo(_map);
+  gHybrid.addTo(_map);
 
   L.control.layers({
     '🗺️ Google - Đường phố': gRoad,
@@ -73,18 +73,18 @@ function _makeIcon(color) {
 
 function placeMapMarker(lat, lon, cm, label) {
   if (_marker) _map.removeLayer(_marker);
-  _marker = L.marker([lat,lon], {icon:_makeIcon('#00C896')});
+  _marker = L.marker([lat,lon], {icon:_makeIcon('#A6192E')});
   var latDMS=ddToDMS(lat,'lat'), lonDMS=ddToDMS(lon,'lon');
   var vn2000Info='';
   if (cm!==null && !isNaN(cm)) {
     try {
       var vn=wgs84ToVN2000TM3(lat,lon,cm);
-      vn2000Info='<div style="margin-top:8px;padding-top:6px;border-top:1px solid #333;color:#00C896;font-size:11px">'+
+      vn2000Info='<div style="margin-top:8px;padding-top:6px;border-top:1px solid #333;color:#D4AF37;font-size:11px">'+
         '⚡ VN2000 KTT '+cm+'°<br>X: <b>'+formatCoordNum(vn.x,3)+'m</b><br>Y: <b>'+formatCoordNum(vn.y,3)+'m</b></div>';
     }catch(e){}
   }
   var html='<div style="font-family:Inter,sans-serif;color:#e0e0e0;min-width:180px;font-size:12px">'+
-    (label?'<div style="font-weight:700;color:#00C896;margin-bottom:4px">'+label+'</div>':'')+
+    (label?'<div style="font-weight:700;color:#D4AF37;margin-bottom:4px">'+label+'</div>':'')+
     '<div>🌐 WGS84</div>Lat: <b>'+lat.toFixed(7)+'</b><br>Lon: <b>'+lon.toFixed(7)+'</b>'+
     '<br><span style="font-size:10px;color:#aaa">'+latDMS.formatted+' / '+lonDMS.formatted+'</span>'+
     vn2000Info+'</div>';
