@@ -779,17 +779,22 @@ function initMobilePanel() {
     });
   }
 
-  /* Swipe up / down on handle */
+  /* Swipe up / down on handle or tabs (wider touch area) */
   var _touchStartY = 0;
-  if (handle) {
-    handle.addEventListener('touchstart', function(e) {
+  var swipeZone = document.querySelector('.panel-tabs') || handle;
+  if (swipeZone) {
+    swipeZone.addEventListener('touchstart', function(e) {
       _touchStartY = e.touches[0].clientY;
     }, { passive: true });
 
-    handle.addEventListener('touchend', function(e) {
+    swipeZone.addEventListener('touchend', function(e) {
       var dy = _touchStartY - e.changedTouches[0].clientY;
-      if (dy > 30)  setExpanded(true);   /* swipe up → expand */
-      if (dy < -30) setExpanded(false);  /* swipe down → collapse */
+      // If we are scrolling horizontally inside tabs, don't trigger expand/collapse
+      var dx = Math.abs(e.changedTouches[0].clientX - e.touches[0]?.clientX || 0);
+      if (Math.abs(dy) > 30 && Math.abs(dy) > dx) {
+        if (dy > 30)  setExpanded(true);   /* swipe up → expand */
+        if (dy < -30) setExpanded(false);  /* swipe down → collapse */
+      }
     }, { passive: true });
   }
 
