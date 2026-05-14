@@ -13,9 +13,12 @@ var state = {
   theme: localStorage.getItem('vn2000_theme') || 'light'
 };
 
-// Gemini API free tier chưa khả dụng tại VN (quota=0 cho mọi model 2.0)
-// Dùng Tesseract.js Offline — miễn phí, không giới hạn, đã được tối ưu PSM 6
-var OCR_API_URL = '';
+// Hướng dẫn dùng AI OCR (Gemini 2.0 Flash) qua Vercel Serverless Function:
+// 1. Deploy toàn bộ code này lên Vercel.
+// 2. Cấu hình biến môi trường GEMINI_API_KEY trên Vercel.
+// 3. Đổi OCR_API_URL = '/api/ocr'; (nếu frontend và API cùng host trên Vercel)
+//    Hoặc OCR_API_URL = 'https://ten-app-cua-ban.vercel.app/api/ocr'; (nếu frontend vẫn ở GitHub Pages)
+var OCR_API_URL = ''; // Để trống ('') sẽ dùng Tesseract.js Offline. Điền URL để dùng AI.
 
 function $(id) { return document.getElementById(id); }
 
