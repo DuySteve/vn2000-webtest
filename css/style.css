@@ -41,14 +41,18 @@
 /* ── Reset ───────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { scroll-behavior: smooth; }
+html { 
+  scroll-behavior: smooth; 
+  overscroll-behavior-y: none; /* Prevent pull-to-refresh and bounce */
+}
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
-  min-height: 100vh;
-  overflow-x: hidden;
+  height: 100%; /* Better than min-height: 100vh for fixed apps */
+  overflow: hidden; /* Lock the viewport */
+  overscroll-behavior-y: none;
   line-height: 1.6;
   transition: background var(--transition), color var(--transition);
 }
