@@ -723,12 +723,17 @@ async function onSoDoOcrUpload(e) {
 
     if (OCR_API_URL) {
       showToast('Đang gửi ảnh lên AI Server...', 'info', 4000);
+      var userModel = 'llama-3.2-11b-vision-preview';
+      if ($('sodo-model-input')) {
+        userModel = $('sodo-model-input').value.trim() || userModel;
+      }
+
       var response = await fetch(OCR_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           imageBase64: processedImage.primary,
-          model: 'llama-3.2-11b-vision-instruct' // Model chính thức
+          model: userModel
         })
       });
       var result = await response.json();
