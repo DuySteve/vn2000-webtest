@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker – VN2000 OCR via Groq API (Llama 3.2 Vision)
+ * Cloudflare Worker – VN2000 OCR via Groq API (Llama 4 Scout)
  *
  * Env secrets cần cấu hình trên Cloudflare Dashboard:
  *   GROQ_API_KEY  → API Key lấy từ https://console.groq.com
