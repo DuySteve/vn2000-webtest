@@ -438,33 +438,69 @@ function addSoDoPoint(xVal, yVal) {
 
 /* ── SỔ ĐỎ OCR ── */
 
-/* ── Tesseract Worker Singleton: khởi tạo 1 lần, tái dùng cho tất cả lần quét ── */
+/* ── Tesseract Worker Singleton ── */
 var _ocrWorker = null;
 var _ocrWorkerReady = false;
 
 async function getOcrWorker() {
   if (_ocrWorker && _ocrWorkerReady) return _ocrWorker;
   if (!window.Tesseract) throw new Error('Thư viện OCR chưa tải xong, vui lòng thử lại!');
-  
   _ocrWorker = await Tesseract.createWorker('eng');
-  await _ocrWorker.setParameters({
-    tessedit_pageseg_mode: '6',      // Đọc khối văn bản đơn, tốt nhất cho bảng số
-    preserve_interword_spaces: '1',
-    tessedit_char_whitelist: '0123456789., '  // Chỉ nhận số, dấu chấm, dấu cách
-  });
   _ocrWorkerReady = true;
   return _ocrWorker;
 }
 
-/* Tiền khởi tạo worker ngay khi trang load (ẩn thời gian chờ khỏi người dùng) */
+/* Tiền khởi tạo worker sau 2s khi trang load */
 window.addEventListener('load', function() {
   setTimeout(function() { getOcrWorker().catch(function(){}); }, 2000);
 });
 
 /**
- * Adaptive Binarization: chuyển ảnh về trắng/đen chuẩn dựa trên ngưỡng cục bộ.
- * Tốt hơn CSS filter rất nhiều vì xử lý từng vùng thay vì toàn cục,
- * giúp giữ chữ tốt ngay cả khi ảnh có bóng, chói, hoặc nền không đều.
+ * Phát hiện góc nghiêng của tài liệu bằng Horizontal Projection Profile.
+ * Sử dụng ảnh đã binarize (mảng gray), subsample 1/4 để chạy nhanh trên mobile.
+ */
+function detectSkewAngle(gray, w, h) {
+  var step = 4; // subsample mỗi 4 pixel để tăng tốc ~16x
+  var testAngles = [-8, -6, -4, -2, -1, 0, 1, 2, 4, 6, 8];
+  var cx = w >> 1, cy = h >> 1;
+  var bestAngle = 0, bestScore = -1;
+
+  testAngles.forEach(function(deg) {
+    var rad = deg * Math.PI / 180;
+    var cos = Math.cos(rad), sin = Math.sin(rad);
+    var sh = Math.ceil(h / step);
+    var proj = new Int32Array(sh);
+
+    for (var y = 0; y < h; y += step) {
+      for (var x = 0; x < w; x += step) {
+        // Xoay ngược chiều để "thử thẳng" ảnh
+        var rx = Math.round((x - cx) * cos + (y - cy) * sin + cx);
+        var ry = Math.round(-(x - cx) * sin + (y - cy) * cos + cy);
+        if (rx >= 0 && rx < w && ry >= 0 && ry < h) {
+          if (gray[ry * w + rx] < 128) proj[Math.floor(y / step)]++;
+        }
+      }
+    }
+
+    // Tính variance của horizontal projection — góc đúng tạo ra variance cao nhất
+    var mean = 0, i;
+    for (i = 0; i < sh; i++) mean += proj[i];
+    mean /= sh;
+    var score = 0;
+    for (i = 0; i < sh; i++) score += (proj[i] - mean) * (proj[i] - mean);
+
+    if (score > bestScore) { bestScore = score; bestAngle = deg; }
+  });
+
+  return bestAngle;
+}
+
+/**
+ * Adaptive Binarization + Deskew
+ * 1. Scale ảnh lên 2000px
+ * 2. Grayscale
+ * 3. Bradley-Roth adaptive threshold
+ * 4. Phát hiện và chỉnh góc nghiêng
  */
 function preprocessImageForOCR(file) {
   return new Promise(function(resolve, reject) {
@@ -475,30 +511,25 @@ function preprocessImageForOCR(file) {
       var canvas = document.createElement('canvas');
       var ctx = canvas.getContext('2d');
 
-      // Scale lên ~2000px chiều ngang (Tesseract đọc tốt nhất ở ngưỡng này)
       var targetW = 2000;
       var scale = img.width < targetW ? (targetW / img.width) : 1;
-      // Không scale quá 3000px để tránh tràn RAM trên mobile
       if (img.width * scale > 3000) scale = 3000 / img.width;
 
       canvas.width  = Math.floor(img.width  * scale);
       canvas.height = Math.floor(img.height * scale);
 
-      // Bước 1: Vẽ gốc lên canvas để lấy pixel data
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       var data = imageData.data;
       var w = canvas.width, h = canvas.height;
 
-      // Bước 2: Chuyển sang Grayscale
+      // Grayscale
       var gray = new Uint8Array(w * h);
       for (var i = 0; i < data.length; i += 4) {
-        var px = i / 4;
-        gray[px] = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+        gray[i >> 2] = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
       }
 
-      // Bước 3: Adaptive Thresholding (Bradley–Roth local binarization)
-      // Tính tổng tích lũy (integral image) để lấy ngưỡng cục bộ nhanh O(n)
+      // Bradley-Roth Adaptive Threshold
       var integral = new Float64Array(w * h);
       for (var y = 0; y < h; y++) {
         for (var x = 0; x < w; x++) {
@@ -509,33 +540,43 @@ function preprocessImageForOCR(file) {
             - (x > 0 && y > 0 ? integral[idx - w - 1] : 0);
         }
       }
-
-      // Kích thước cửa sổ: ~1/8 chiều rộng, tối thiểu 15px
-      var s = Math.max(15, Math.floor(w / 8));
-      var t = 0.15; // Ngưỡng độ nhạy (15%): pixel tối hơn 15% so với trung bình vùng → in đen
-
+      var s = Math.max(15, Math.floor(w / 8)), t = 0.15;
+      var binGray = new Uint8Array(w * h);
       for (var y = 0; y < h; y++) {
         for (var x = 0; x < w; x++) {
           var idx = y * w + x;
-          var x1 = Math.max(0, x - s), y1 = Math.max(0, y - s);
-          var x2 = Math.min(w - 1, x + s), y2 = Math.min(h - 1, y + s);
-          var count = (x2 - x1) * (y2 - y1);
-          var sum = integral[y2 * w + x2]
-            - (x1 > 0 ? integral[y2 * w + x1 - 1] : 0)
-            - (y1 > 0 ? integral[(y1 - 1) * w + x2] : 0)
-            + (x1 > 0 && y1 > 0 ? integral[(y1 - 1) * w + x1 - 1] : 0);
-          var val = gray[idx] * count <= sum * (1 - t) ? 0 : 255;
-          // Ghi lại pixel đen/trắng vào ImageData gốc
-          data[idx * 4]     = val;
-          data[idx * 4 + 1] = val;
-          data[idx * 4 + 2] = val;
-          data[idx * 4 + 3] = 255;
+          var x1 = Math.max(0, x-s), y1 = Math.max(0, y-s);
+          var x2 = Math.min(w-1, x+s), y2 = Math.min(h-1, y+s);
+          var cnt = (x2-x1) * (y2-y1);
+          var sum = integral[y2*w+x2]
+            - (x1>0 ? integral[y2*w+x1-1] : 0)
+            - (y1>0 ? integral[(y1-1)*w+x2] : 0)
+            + (x1>0 && y1>0 ? integral[(y1-1)*w+x1-1] : 0);
+          var v = gray[idx] * cnt <= sum * (1-t) ? 0 : 255;
+          binGray[idx] = v;
+          data[idx*4] = data[idx*4+1] = data[idx*4+2] = v;
+          data[idx*4+3] = 255;
         }
       }
-
       ctx.putImageData(imageData, 0, 0);
-      // Xuất PNG lossless để giữ nguyên nét
-      resolve(canvas.toDataURL('image/png'));
+
+      // Phát hiện góc nghiêng từ ảnh đã binarize
+      var skew = detectSkewAngle(binGray, w, h);
+
+      if (Math.abs(skew) >= 1.0) {
+        // Xoay canvas để chỉnh nghiêng
+        var rotCanvas = document.createElement('canvas');
+        rotCanvas.width = w; rotCanvas.height = h;
+        var rotCtx = rotCanvas.getContext('2d');
+        rotCtx.fillStyle = '#fff';
+        rotCtx.fillRect(0, 0, w, h);
+        rotCtx.translate(w/2, h/2);
+        rotCtx.rotate(-skew * Math.PI / 180);
+        rotCtx.drawImage(canvas, -w/2, -h/2);
+        resolve(rotCanvas.toDataURL('image/png'));
+      } else {
+        resolve(canvas.toDataURL('image/png'));
+      }
     };
     img.onerror = reject;
     img.src = url;
@@ -545,7 +586,7 @@ function preprocessImageForOCR(file) {
 async function onSoDoOcrUpload(e) {
   var file = e.target.files[0];
   if (!file) return;
-  e.target.value = ''; // reset
+  e.target.value = '';
 
   var btnText = $('sodo-ocr-text');
   var btn = $('sodo-ocr-btn');
@@ -553,14 +594,13 @@ async function onSoDoOcrUpload(e) {
   if (btnText) btnText.textContent = '⏳ Đang quét...';
 
   try {
-    // Tiền xử lý ảnh và lấy OCR worker song song (tiết kiệm thời gian)
     var [processedImage, worker] = await Promise.all([
       preprocessImageForOCR(file),
       OCR_API_URL ? Promise.resolve(null) : getOcrWorker()
     ]);
 
     if (OCR_API_URL) {
-      showToast('Đang gửi ảnh lên AI Server để phân tích...', 'info', 4000);
+      showToast('Đang gửi ảnh lên AI Server...', 'info', 4000);
       var response = await fetch(OCR_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -570,7 +610,7 @@ async function onSoDoOcrUpload(e) {
       if (!result.success) throw new Error(result.error);
       var points = result.data;
       if (!points || points.length === 0) throw new Error('AI không tìm thấy tọa độ nào hợp lệ.');
-      showToast('AI đã nhận diện thành công ' + points.length + ' điểm tọa độ!', 'success', 5000);
+      showToast('AI đã nhận diện ' + points.length + ' điểm!', 'success', 5000);
       var list = $('sodo-points-list');
       if (list) list.innerHTML = '';
       _soDoPointCount = 0;
@@ -579,15 +619,30 @@ async function onSoDoOcrUpload(e) {
 
     } else {
       showToast('Đang nhận dạng tọa độ...', 'info', 4000);
-      var res = await worker.recognize(processedImage);
-      parseOcrText(res.data.text);
+
+      // Lần 1: PSM 6 (Uniform block — tốt nhất cho bảng chuẩn)
+      await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1', tessedit_char_whitelist: '0123456789., ' });
+      var res1 = await worker.recognize(processedImage);
+      var pts1 = extractPointsFromOcrText(res1.data.text);
+
+      // Lần 2: PSM 11 (Sparse text — tốt hơn cho ảnh nghiêng/cong)
+      // Chỉ chạy nếu lần 1 thiếu điểm
+      if (pts1.length < 3) {
+        showToast('Đang thử lại (chế độ thích nghi)...', 'info', 3000);
+        await worker.setParameters({ tessedit_pageseg_mode: '11', preserve_interword_spaces: '1', tessedit_char_whitelist: '0123456789., ' });
+        var res2 = await worker.recognize(processedImage);
+        var pts2 = extractPointsFromOcrText(res2.data.text);
+        // Khôi phục PSM 6 cho lần sau
+        await worker.setParameters({ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '0123456789., ' });
+        if (pts2.length > pts1.length) { renderOcrPoints(pts2); return; }
+      }
+
+      renderOcrPoints(pts1);
     }
   } catch (err) {
     console.error(err);
-    // Worker lỗi → reset để lần sau tạo lại
     if (_ocrWorker) { _ocrWorker.terminate().catch(function(){}); }
-    _ocrWorker = null;
-    _ocrWorkerReady = false;
+    _ocrWorker = null; _ocrWorkerReady = false;
     showToast('Lỗi đọc ảnh: ' + err.message, 'error', 6000);
   } finally {
     if (btn) btn.disabled = false;
@@ -595,127 +650,76 @@ async function onSoDoOcrUpload(e) {
   }
 }
 
-function parseOcrText(text) {
-  /* ── Bước 1: Chuẩn hóa text OCR theo từng dòng ── */
+/* Tách logic trích xuất điểm khỏi render để dùng cho multi-pass */
+function extractPointsFromOcrText(text) {
   var lines = text.split('\n').map(function(line) {
     return line
-      // Sửa ký tự bị nhầm thành số
-      .replace(/[oO]/g, '0')
-      .replace(/[lI|]/g, '1')
-      // Chuẩn hóa dấu phẩy thập phân VN: chỉ giữa 2 chữ số
+      .replace(/[oO]/g, '0').replace(/[lI|]/g, '1')
       .replace(/(\d),(\d)/g, '$1.$2')
-      // Xóa khoảng trắng quanh dấu chấm khi nằm giữa số (dấu chấm thập phân bị tách)
       .replace(/(\d)\s*\.\s*(\d)/g, '$1.$2');
   });
-
-  /* ── Bước 2: Khôi phục "decimal bị đọc thành space hoặc phẩy" ── */
-  // Lỗi phổ biến nhất: "2363228 565" hoặc "2363228,565" thay vì "2363228.565"
   lines = lines.map(function(line) {
-    // Phẩy thay dấu thập phân trong số tọa độ dài (7 chữ số + phẩy + 3 chữ số)
     line = line.replace(/\b(\d{7}),(\d{3})\b/g, '$1.$2');
-    // Phẩy thay dấu thập phân cho Easting (6 chữ số + phẩy + 3 chữ số)
-    line = line.replace(/\b(\d{6}),(\d{3})\b/g, function(m, a, b) {
-      return (parseFloat(a) >= 100000 && parseFloat(a) <= 900000) ? a + '.' + b : m;
-    });
-    // Space thay dấu thập phân: "2363228 565" → "2363228.565"
+    line = line.replace(/\b(\d{6}),(\d{3})\b/g, function(m,a,b){ return (parseFloat(a)>=100000&&parseFloat(a)<=900000)?a+'.'+b:m; });
     line = line.replace(/\b(\d{7})\s+(\d{3})\b/g, '$1.$2');
-    // Space thay dấu thập phân cho Easting: "520031 694" → "520031.694"
-    line = line.replace(/\b(\d{6})\s+(\d{3})\b/g, function(m, a, b) {
-      return (parseFloat(a) >= 100000 && parseFloat(a) <= 900000) ? a + '.' + b : m;
-    });
+    line = line.replace(/\b(\d{6})\s+(\d{3})\b/g, function(m,a,b){ return (parseFloat(a)>=100000&&parseFloat(a)<=900000)?a+'.'+b:m; });
     return line;
   });
 
-  /* ── Bước 3: Trích xuất số hợp lệ từng dòng ── */
-  // Nhận: số có 5-8 chữ số nguyên (kèm thập phân tùy chọn), hoặc số liền 9-11 chữ số (thiếu dấu chấm)
   var numRx = /\b(\d{5,8}(?:\.\d{1,4})?|\d{9,11})\b/g;
-
-  function fixMissingDecimal(raw) {
-    if (raw.indexOf('.') !== -1) return parseFloat(raw); // Đã có dấu thập phân
+  function fixDec(raw) {
+    if (raw.indexOf('.') !== -1) return parseFloat(raw);
     var s = raw;
-    // Số 10 chữ số bắt đầu bằng '2' → X Northing: 2XXXXXXX.XXX
-    if (s.length === 10 && s.startsWith('2')) {
-      return parseFloat(s.substring(0, 7) + '.' + s.substring(7));
-    }
-    // Số 9 chữ số → Y Easting: XXXXXX.XXX
-    if (s.length === 9) {
-      return parseFloat(s.substring(0, 6) + '.' + s.substring(6));
-    }
+    if (s.length === 10 && s[0] === '2') return parseFloat(s.slice(0,7)+'.'+s.slice(7));
+    if (s.length === 9) return parseFloat(s.slice(0,6)+'.'+s.slice(6));
     return parseFloat(raw);
   }
-
-  function classify(val) {
-    // X = Northing VN2000: ~800k - 3M (thực tế Quảng Ninh ~2.3M - 2.5M)
-    if (val >= 800000 && val <= 3000000) return 'X';
-    // Y = Easting VN2000: ~100k - 900k (thực tế ~400k - 650k)
-    if (val >= 100000 && val <= 900000) return 'Y';
+  function cls(v) {
+    if (v >= 800000 && v <= 3000000) return 'X';
+    if (v >= 100000 && v <= 900000)  return 'Y';
     return null;
   }
 
-  /* ── Bước 4: Parse từng dòng, ghép cặp X-Y ── */
-  var pairedByLine = [];
-  var allX = [], allY = [];
-
+  var paired = [], allX = [], allY = [];
   lines.forEach(function(line) {
-    var matches = [];
-    var m;
-    numRx.lastIndex = 0;
+    var hits = [], m; numRx.lastIndex = 0;
     while ((m = numRx.exec(line)) !== null) {
-      var val = fixMissingDecimal(m[1]);
-      var cls = classify(val);
-      if (cls) matches.push({ val: val, cls: cls });
+      var v = fixDec(m[1]), c = cls(v);
+      if (c) hits.push({val:v, cls:c});
     }
-
-    var xs = matches.filter(function(v) { return v.cls === 'X'; });
-    var ys = matches.filter(function(v) { return v.cls === 'Y'; });
-
-    xs.forEach(function(v) { allX.push(v.val); });
-    ys.forEach(function(v) { allY.push(v.val); });
-
-    if (xs.length === 1 && ys.length === 1) {
-      pairedByLine.push({ x: xs[0].val, y: ys[0].val });
-    } else if (xs.length > 0 && xs.length === ys.length) {
-      for (var i = 0; i < xs.length; i++) {
-        pairedByLine.push({ x: xs[i].val, y: ys[i].val });
-      }
+    var xs = hits.filter(function(h){return h.cls==='X';}),
+        ys = hits.filter(function(h){return h.cls==='Y';});
+    xs.forEach(function(h){allX.push(h.val);}); ys.forEach(function(h){allY.push(h.val);});
+    if (xs.length===1 && ys.length===1) { paired.push({x:xs[0].val, y:ys[0].val}); }
+    else if (xs.length>0 && xs.length===ys.length) {
+      for (var i=0;i<xs.length;i++) paired.push({x:xs[i].val, y:ys[i].val});
     }
   });
 
-  /* ── Bước 5: Chọn kết quả tốt nhất ── */
-  var foundPoints = [];
-  if (pairedByLine.length > 0) {
-    foundPoints = pairedByLine;
-  } else if (allX.length > 0 && allY.length > 0) {
-    var count = Math.min(allX.length, allY.length);
-    for (var j = 0; j < count; j++) {
-      foundPoints.push({ x: allX[j], y: allY[j] });
-    }
-  }
+  var found = paired.length > 0 ? paired : (function(){
+    var r=[]; var cnt=Math.min(allX.length,allY.length);
+    for(var j=0;j<cnt;j++) r.push({x:allX[j],y:allY[j]});
+    return r;
+  })();
 
-  /* ── Bước 6: Loại điểm trùng liên tiếp (tolerance 1m) ── */
-  var uniquePoints = [];
-  foundPoints.forEach(function(p) {
-    var last = uniquePoints[uniquePoints.length - 1];
-    if (!last || Math.abs(last.x - p.x) > 1 || Math.abs(last.y - p.y) > 1) {
-      uniquePoints.push(p);
-    }
-  });
-
-  /* ── Bước 7: Hiển thị ── */
-  if (uniquePoints.length === 0) {
-    showToast('Không quét được tọa độ hợp lệ. Hãy chụp thẳng, rõ nét, tránh chói!', 'warning', 7000);
-  } else {
-    showToast('Đã nhận diện ' + uniquePoints.length + ' điểm tọa độ!', 'success', 5000);
-    var list = $('sodo-points-list');
-    if (list) list.innerHTML = '';
-    _soDoPointCount = 0;
-    uniquePoints.forEach(function(p) { addSoDoPoint(p.x, p.y); });
-    drawSoDo();
-  }
+  // Loại trùng liên tiếp
+  var uniq = [];
+  found.forEach(function(p){ var last=uniq[uniq.length-1]; if(!last||Math.abs(last.x-p.x)>1||Math.abs(last.y-p.y)>1) uniq.push(p); });
+  return uniq;
 }
 
-
-
+function renderOcrPoints(pts) {
+  if (pts.length === 0) {
+    showToast('Không quét được tọa độ hợp lệ. Hãy chụp thẳng, rõ nét!', 'warning', 7000);
+    return;
+  }
+  showToast('Đã nhận diện ' + pts.length + ' điểm tọa độ!', 'success', 5000);
+  var list = $('sodo-points-list');
+  if (list) list.innerHTML = '';
+  _soDoPointCount = 0;
+  pts.forEach(function(p) { addSoDoPoint(p.x, p.y); });
+  drawSoDo();
+}
 function drawSoDo() {
   var sel = $('sodo-province');
   var opt = sel && sel.selectedOptions[0];
