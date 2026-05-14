@@ -266,7 +266,6 @@ function drawSoDo() {
   }
 
   $('sodo-result') && $('sodo-result').classList.remove('hidden');
-  flyToLocation(latLons[0].lat, latLons[0].lon, 17);
   showToast('Đã vẽ thửa ' + pts.length + ' đỉnh — ' + formatArea(area), 'success', 5000);
 }
 

@@ -186,11 +186,11 @@ function drawLandPlot(wgs84Points, label) {
     /* Removed centroid label to avoid obscuring the map on mobile */
   }
 
-  // Zoom fit map
+  // Zoom fit map — phóng tối đa đến level 21 (~10m như Google Maps)
   if (_plotLayer) {
-    _map.fitBounds(_plotLayer.getBounds().pad(0.1));
+    _map.fitBounds(_plotLayer.getBounds().pad(0.15), { maxZoom: 21, animate: true, duration: 1.2 });
   } else if (_plotMarkers.length > 0) {
-    _map.flyTo(_plotMarkers[0].getLatLng(), 16);
+    _map.flyTo(_plotMarkers[0].getLatLng(), 21);
   }
   
   return { area:area, perimeter:perimeter, edgeLengths:edgeLengths };
