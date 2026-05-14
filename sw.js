@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vn2000-web-v44';
+const CACHE_NAME = 'vn2000-web-v45';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -41,17 +41,28 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Ignore map tiles to prevent cache bloating, always fetch them from network
+  // Bỏ qua map tiles
   if (event.request.url.includes('mt.google.com')) {
     return;
   }
   
+  // Chiến lược: Network First, Fallback to Cache
+  // Giúp trình duyệt luôn lấy bản mới nhất khi F5, chỉ dùng Cache khi mất mạng
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+    fetch(event.request).then((networkResponse) => {
+      // Lưu bản mới nhất vào cache
+      if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+        const responseToCache = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
+      }
+      return networkResponse;
     }).catch(() => {
-      // Fallback for offline if something goes wrong
-      return caches.match('./index.html');
+      // Nếu lỗi mạng, lấy từ cache
+      return caches.match(event.request).then((cachedResponse) => {
+        return cachedResponse || caches.match('./index.html');
+      });
     })
   );
 });
