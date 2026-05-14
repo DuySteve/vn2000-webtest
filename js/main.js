@@ -510,13 +510,14 @@ function preprocessImageForOCR(file) {
     var url = URL.createObjectURL(file);
     var img = new Image();
     img.onload = function() {
-      URL.revokeObjectURL(url);
-      var canvas = document.createElement('canvas');
-      var ctx = canvas.getContext('2d');
+      try {
+        URL.revokeObjectURL(url);
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
 
-      var targetW = 2000;
-      var scale = img.width < targetW ? (targetW / img.width) : 1;
-      if (img.width * scale > 3000) scale = 3000 / img.width;
+        var targetW = 2000;
+        var scale = img.width < targetW ? (targetW / img.width) : 1;
+        if (img.width * scale > 3000) scale = 3000 / img.width;
 
       canvas.width  = Math.floor(img.width  * scale);
       canvas.height = Math.floor(img.height * scale);
@@ -695,7 +696,9 @@ function preprocessImageForOCR(file) {
         primaryDataUrl=canvas.toDataURL('image/png');
       }
       resolve({primary:primaryDataUrl, secondary:secondaryDataUrl, isColoredBg:isColoredBg});
-
+      } catch(e) {
+        reject(e);
+      }
     };
     img.onerror = reject;
     img.src = url;

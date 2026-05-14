@@ -5,42 +5,37 @@ export const config = {
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-export default async function handler(req) {
-  // 1. CORS Preflight - Cho phép GitHub Pages gọi tới Vercel
+export default async function handler(req, res) {
+  // CORS Preflight
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    });
+    return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { imageBase64 } = await req.json();
+    const { imageBase64 } = req.body;
     if (!imageBase64) {
       throw new Error('Thiếu trường imageBase64 trong request');
     }
 
-    // Lấy API Key từ Environment Variables của Vercel
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
       throw new Error('Chưa cấu hình GROQ_API_KEY trên Vercel');
     }
 
-    // Đảm bảo có đúng định dạng data URL
     const imageUrl = imageBase64.startsWith('data:image') 
       ? imageBase64 
       : `data:image/png;base64,${imageBase64}`;
 
     const payload = {
-      model: "llama-3.2-11b-vision-preview", // 11B Vision là bản miễn phí ổn định nhất. 90B và Scout bị Groq khoá (403 Forbidden)
+      model: "llama-3.2-11b-vision-preview", // 11B Vision
       messages: [
         {
           role: "user",
@@ -71,7 +66,6 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
       max_tokens: 2048
     };
 
-    // Gọi API của Groq
     const aiRes = await fetch(GROQ_API_URL, {
       method: 'POST',
       headers: { 
@@ -94,7 +88,6 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
     const aiText = data.choices?.[0]?.message?.content;
     if (!aiText) throw new Error('AI không trả về kết quả.');
 
-    // Làm sạch JSON
     const jsonStr = aiText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     const coordinates = JSON.parse(jsonStr);
 
@@ -102,20 +95,8 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
       throw new Error('Không tìm thấy tọa độ nào trong ảnh.');
     }
 
-    return new Response(JSON.stringify({ success: true, data: coordinates }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*', // Bắt buộc để bypass CORS
-      },
-    });
+    return res.status(200).json({ success: true, data: coordinates });
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: err.message }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-    });
+    return res.status(500).json({ success: false, error: err.message });
   }
 }
