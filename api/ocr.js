@@ -1,8 +1,8 @@
 export const config = {
-  runtime: 'edge', // Chạy trên Edge Server (US) để vượt geo-block
+  runtime: 'edge', // Chạy trên Edge Server (US)
 };
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent';
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 export default async function handler(req) {
   // 1. CORS Preflight - Cho phép GitHub Pages gọi tới Vercel
@@ -28,19 +28,25 @@ export default async function handler(req) {
     }
 
     // Lấy API Key từ Environment Variables của Vercel
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      throw new Error('Chưa cấu hình GEMINI_API_KEY trên Vercel');
+      throw new Error('Chưa cấu hình GROQ_API_KEY trên Vercel');
     }
 
-    // Cắt bỏ phần header data:image/png;base64,
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    // Đảm bảo có đúng định dạng data URL
+    const imageUrl = imageBase64.startsWith('data:image') 
+      ? imageBase64 
+      : `data:image/png;base64,${imageBase64}`;
 
     const payload = {
-      contents: [{
-        parts: [
-          {
-            text: `Bạn là chuyên gia trắc địa Việt Nam. Hãy trích xuất TẤT CẢ các cặp tọa độ VN2000 (X, Y) từ bảng tọa độ trong hình ảnh này.
+      model: "llama-3.2-90b-vision-preview", // Có thể đổi thành llama-3.2-11b-vision-preview
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Bạn là chuyên gia trắc địa Việt Nam. Hãy trích xuất TẤT CẢ các cặp tọa độ VN2000 (X, Y) từ bảng tọa độ trong hình ảnh này.
 
 QUY TẮC:
 - Tọa độ X (Northing) thường từ 800,000 đến 3,000,000
@@ -50,39 +56,41 @@ QUY TẮC:
 
 CHỈ trả về JSON array thuần túy, không có markdown, không có giải thích:
 [{"x": 2363228.12, "y": 520031.45}]`
-          },
-          {
-            inline_data: {
-              mime_type: 'image/png',
-              data: base64Data,
             },
-          },
-        ],
-      }],
-      generationConfig: {
-        temperature: 0,
-        maxOutputTokens: 2048,
-      },
+            {
+              type: "image_url",
+              image_url: {
+                url: imageUrl
+              }
+            }
+          ]
+        }
+      ],
+      temperature: 0,
+      max_tokens: 2048
     };
 
-    // Gọi API của Google từ IP Vercel (Mỹ)
-    const aiRes = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+    // Gọi API của Groq
+    const aiRes = await fetch(GROQ_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
       body: JSON.stringify(payload),
     });
 
     if (!aiRes.ok) {
       const errText = await aiRes.text();
-      throw new Error(`Google AI HTTP ${aiRes.status}: ${errText}`);
+      throw new Error(`Groq API HTTP ${aiRes.status}: ${errText}`);
     }
 
     const data = await aiRes.json();
     if (data.error) {
-      throw new Error(`Google AI error: ${data.error.message}`);
+      throw new Error(`Groq API error: ${data.error.message}`);
     }
 
-    const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const aiText = data.choices?.[0]?.message?.content;
     if (!aiText) throw new Error('AI không trả về kết quả.');
 
     // Làm sạch JSON

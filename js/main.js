@@ -13,9 +13,9 @@ var state = {
   theme: localStorage.getItem('vn2000_theme') || 'light'
 };
 
-// Hướng dẫn dùng AI OCR (Gemini 2.0 Flash) qua Vercel Serverless Function:
+// Hướng dẫn dùng AI OCR qua Vercel Serverless Function (Ví dụ dùng Groq Llama 3.2 Vision):
 // 1. Deploy toàn bộ code này lên Vercel.
-// 2. Cấu hình biến môi trường GEMINI_API_KEY trên Vercel.
+// 2. Cấu hình biến môi trường GROQ_API_KEY trên Vercel.
 // 3. Đổi OCR_API_URL = '/api/ocr'; (nếu frontend và API cùng host trên Vercel)
 //    Hoặc OCR_API_URL = 'https://ten-app-cua-ban.vercel.app/api/ocr'; (nếu frontend vẫn ở GitHub Pages)
 var OCR_API_URL = ''; // Để trống ('') sẽ dùng Tesseract.js Offline. Điền URL để dùng AI.
