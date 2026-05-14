@@ -728,7 +728,7 @@ async function onSoDoOcrUpload(e) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           imageBase64: processedImage.primary,
-          model: 'llama-3.2-90b-vision-preview' // Thử model 90B
+          model: 'llama-3.2-11b-vision-instruct' // Model chính thức
         })
       });
       var result = await response.json();
