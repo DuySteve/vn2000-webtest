@@ -1,0 +1,7 @@
+{
+  "name": "vn2000-web",
+  "version": "1.0.0",
+  "description": "VN2000 Web App",
+  "type": "module",
+  "private": true
+}
