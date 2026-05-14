@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vn2000-web-v52';
+const CACHE_NAME = 'vn2000-web-v53';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
