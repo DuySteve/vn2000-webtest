@@ -266,6 +266,9 @@ function drawSoDo() {
   }
 
   $('sodo-result') && $('sodo-result').classList.remove('hidden');
+  if (window.innerWidth <= 600 && window._setMobilePanelExpanded) {
+    window._setMobilePanelExpanded(false);
+  }
   showToast('Đã vẽ thửa ' + pts.length + ' đỉnh — ' + formatArea(area), 'success', 5000);
 }
 
@@ -351,22 +354,47 @@ function initMobilePanel() {
   if (!panel) return;
 
   var isExpanded = false;
-  function setExpanded(v) {
+  window._setMobilePanelExpanded = function(v) {
     isExpanded = v;
     panel.classList.toggle('expanded', v);
     if (fab) fab.classList.toggle('active', v);
     if (fabIcon) fabIcon.textContent = v ? '✕' : '📋';
-  }
+  };
 
-  if (fab) fab.addEventListener('click', function() { setExpanded(!isExpanded); });
+  if (fab) fab.addEventListener('click', function() { window._setMobilePanelExpanded(!isExpanded); });
 
   if (handle) {
-    var startY = 0, startExpanded = false;
-    handle.addEventListener('touchstart', function(e) { startY = e.touches[0].clientY; startExpanded = isExpanded; }, { passive: true });
+    var startY = 0, currentY = 0, isDragging = false;
+    handle.addEventListener('touchstart', function(e) { 
+      startY = e.touches[0].clientY; 
+      isDragging = true;
+      panel.style.transition = 'none'; // Disable transition during drag for smoothness
+    }, { passive: true });
+    
+    handle.addEventListener('touchmove', function(e) {
+      if (!isDragging) return;
+      currentY = e.touches[0].clientY;
+      var dy = currentY - startY;
+      
+      // Add slight resistance when dragging up if already expanded, or down if collapsed
+      if (isExpanded && dy < 0) dy = dy * 0.2;
+      if (!isExpanded && dy > 0) dy = dy * 0.2;
+      
+      var baseHeight = isExpanded ? (window.innerHeight * 0.88) : 108;
+      var newHeight = baseHeight - dy;
+      panel.style.height = newHeight + 'px';
+    }, { passive: true });
+    
     handle.addEventListener('touchend', function(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      panel.style.transition = ''; // Restore transition
+      panel.style.height = ''; // Remove inline style so class takes over
+      
       var dy = e.changedTouches[0].clientY - startY;
-      if (dy < -30) setExpanded(true);
-      if (dy > 30) setExpanded(false);
+      if (Math.abs(dy) > 40) { // Threshold to toggle
+        window._setMobilePanelExpanded(dy < 0);
+      }
     }, { passive: true });
   }
 }

@@ -984,6 +984,7 @@ select option { background: var(--bg-input); color: var(--text-primary); }
   .panel-handle {
     display: flex;
     flex-shrink: 0;
+    touch-action: none; /* Smooth drag, prevents browser pull-to-refresh / scrolling */
   }
 
   /* Tabs: scrollable horizontal */
