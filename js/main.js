@@ -441,6 +441,42 @@ function addSoDoPoint(xVal, yVal) {
 
 /* ── SỔ ĐỎ OCR ── */
 
+// ── TỐI ƯU CHO AI VISION ──
+function preprocessImageForOCR(file) {
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      try {
+        URL.revokeObjectURL(url);
+        var canvas = document.createElement("canvas");
+        var ctx = canvas.getContext("2d");
+        
+        // Resize cực nhanh
+        var maxDim = 1600;
+        var scale = 1.0;
+        if (img.width > maxDim || img.height > maxDim) {
+          scale = maxDim / Math.max(img.width, img.height);
+        }
+
+        canvas.width = Math.floor(img.width * scale);
+        canvas.height = Math.floor(img.height * scale);
+
+        // Vẽ RGB giữ nguyên khử răng cưa
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // JPEG 85% để đạt ~200KB upload tức thì
+        var primaryDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        
+        resolve({ primary: primaryDataUrl, secondary: null, isColoredBg: false });
+      } catch(e) {
+        reject(e);
+      }
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
 
 async function onSoDoOcrUpload(e) {
   var file = e.target.files[0];
