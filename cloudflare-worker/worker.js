@@ -40,7 +40,7 @@ export default {
         : `data:image/png;base64,${imageBase64}`;
 
       const payload = {
-        model: "meta-llama/llama-4-scout-17b-16e-instruct", // Model Scout theo yêu cầu người dùng
+        model: "llama-3.2-11b-vision-preview", // 11B Vision: Bản chuẩn mở miễn phí (Llama 4 Scout đang bị Groq khóa 403)
         messages: [
           {
             role: "user",
