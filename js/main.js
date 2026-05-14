@@ -437,8 +437,35 @@ function addSoDoPoint(xVal, yVal) {
 }
 
 /* ── SỔ ĐỎ OCR ── */
-// Xử lý ảnh trước khi quét để tăng độ tương phản, khử nhiễu
-// Sử dụng bộ lọc tiêu chuẩn thay vì Adaptive Threshold để không bị mất chữ khi nằm sát đường kẻ bảng
+
+/* ── Tesseract Worker Singleton: khởi tạo 1 lần, tái dùng cho tất cả lần quét ── */
+var _ocrWorker = null;
+var _ocrWorkerReady = false;
+
+async function getOcrWorker() {
+  if (_ocrWorker && _ocrWorkerReady) return _ocrWorker;
+  if (!window.Tesseract) throw new Error('Thư viện OCR chưa tải xong, vui lòng thử lại!');
+  
+  _ocrWorker = await Tesseract.createWorker('eng');
+  await _ocrWorker.setParameters({
+    tessedit_pageseg_mode: '6',      // Đọc khối văn bản đơn, tốt nhất cho bảng số
+    preserve_interword_spaces: '1',
+    tessedit_char_whitelist: '0123456789., '  // Chỉ nhận số, dấu chấm, dấu cách
+  });
+  _ocrWorkerReady = true;
+  return _ocrWorker;
+}
+
+/* Tiền khởi tạo worker ngay khi trang load (ẩn thời gian chờ khỏi người dùng) */
+window.addEventListener('load', function() {
+  setTimeout(function() { getOcrWorker().catch(function(){}); }, 2000);
+});
+
+/**
+ * Adaptive Binarization: chuyển ảnh về trắng/đen chuẩn dựa trên ngưỡng cục bộ.
+ * Tốt hơn CSS filter rất nhiều vì xử lý từng vùng thay vì toàn cục,
+ * giúp giữ chữ tốt ngay cả khi ảnh có bóng, chói, hoặc nền không đều.
+ */
 function preprocessImageForOCR(file) {
   return new Promise(function(resolve, reject) {
     var url = URL.createObjectURL(file);
@@ -447,21 +474,68 @@ function preprocessImageForOCR(file) {
       URL.revokeObjectURL(url);
       var canvas = document.createElement('canvas');
       var ctx = canvas.getContext('2d');
-      
-      // Tesseract đọc tốt nhất ở độ phân giải siêu cao (~2400px - 3000px)
-      var scale = 1;
-      if (img.width < 1500) scale = 2400 / img.width;
-      else if (img.width > 3000) scale = 3000 / img.width; // Tránh tràn RAM
 
-      canvas.width = Math.floor(img.width * scale);
+      // Scale lên ~2000px chiều ngang (Tesseract đọc tốt nhất ở ngưỡng này)
+      var targetW = 2000;
+      var scale = img.width < targetW ? (targetW / img.width) : 1;
+      // Không scale quá 3000px để tránh tràn RAM trên mobile
+      if (img.width * scale > 3000) scale = 3000 / img.width;
+
+      canvas.width  = Math.floor(img.width  * scale);
       canvas.height = Math.floor(img.height * scale);
 
-      // Giảm độ tương phản xuống mức cân bằng (180%) để không làm lóa/mất nét chữ khi chụp bị chói
-      ctx.filter = 'grayscale(100%) contrast(180%) brightness(105%)';
+      // Bước 1: Vẽ gốc lên canvas để lấy pixel data
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      ctx.filter = 'none'; // reset
-      
-      resolve(canvas.toDataURL('image/jpeg', 0.9));
+      var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var data = imageData.data;
+      var w = canvas.width, h = canvas.height;
+
+      // Bước 2: Chuyển sang Grayscale
+      var gray = new Uint8Array(w * h);
+      for (var i = 0; i < data.length; i += 4) {
+        var px = i / 4;
+        gray[px] = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+      }
+
+      // Bước 3: Adaptive Thresholding (Bradley–Roth local binarization)
+      // Tính tổng tích lũy (integral image) để lấy ngưỡng cục bộ nhanh O(n)
+      var integral = new Float64Array(w * h);
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          var idx = y * w + x;
+          integral[idx] = gray[idx]
+            + (x > 0 ? integral[idx - 1] : 0)
+            + (y > 0 ? integral[idx - w] : 0)
+            - (x > 0 && y > 0 ? integral[idx - w - 1] : 0);
+        }
+      }
+
+      // Kích thước cửa sổ: ~1/8 chiều rộng, tối thiểu 15px
+      var s = Math.max(15, Math.floor(w / 8));
+      var t = 0.15; // Ngưỡng độ nhạy (15%): pixel tối hơn 15% so với trung bình vùng → in đen
+
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          var idx = y * w + x;
+          var x1 = Math.max(0, x - s), y1 = Math.max(0, y - s);
+          var x2 = Math.min(w - 1, x + s), y2 = Math.min(h - 1, y + s);
+          var count = (x2 - x1) * (y2 - y1);
+          var sum = integral[y2 * w + x2]
+            - (x1 > 0 ? integral[y2 * w + x1 - 1] : 0)
+            - (y1 > 0 ? integral[(y1 - 1) * w + x2] : 0)
+            + (x1 > 0 && y1 > 0 ? integral[(y1 - 1) * w + x1 - 1] : 0);
+          var val = gray[idx] * count <= sum * (1 - t) ? 0 : 255;
+          // Ghi lại pixel đen/trắng vào ImageData gốc
+          data[idx * 4]     = val;
+          data[idx * 4 + 1] = val;
+          data[idx * 4 + 2] = val;
+          data[idx * 4 + 3] = 255;
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      // Xuất PNG lossless để giữ nguyên nét
+      resolve(canvas.toDataURL('image/png'));
     };
     img.onerror = reject;
     img.src = url;
@@ -479,31 +553,23 @@ async function onSoDoOcrUpload(e) {
   if (btnText) btnText.textContent = '⏳ Đang quét...';
 
   try {
-    var processedImage = await preprocessImageForOCR(file);
+    // Tiền xử lý ảnh và lấy OCR worker song song (tiết kiệm thời gian)
+    var [processedImage, worker] = await Promise.all([
+      preprocessImageForOCR(file),
+      OCR_API_URL ? Promise.resolve(null) : getOcrWorker()
+    ]);
 
     if (OCR_API_URL) {
-      // Dùng AI Gemini thông qua Cloudflare Worker (Độ chính xác 100%)
       showToast('Đang gửi ảnh lên AI Server để phân tích...', 'info', 4000);
-      
       var response = await fetch(OCR_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: processedImage })
       });
-      
       var result = await response.json();
       if (!result.success) throw new Error(result.error);
-      
       var points = result.data;
       if (!points || points.length === 0) throw new Error('AI không tìm thấy tọa độ nào hợp lệ.');
-      
-      var debugContainer = document.getElementById('ocr-debug-container');
-      var debugText = document.getElementById('ocr-debug-text');
-      if (debugContainer && debugText) {
-        debugContainer.style.display = 'block';
-        debugText.value = "=== KẾT QUẢ AI GEMINI 1.5 ===\n" + JSON.stringify(points, null, 2);
-      }
-
       showToast('AI đã nhận diện thành công ' + points.length + ' điểm tọa độ!', 'success', 5000);
       var list = $('sodo-points-list');
       if (list) list.innerHTML = '';
@@ -512,33 +578,16 @@ async function onSoDoOcrUpload(e) {
       drawSoDo();
 
     } else {
-      // Dùng Tesseract Offline (Fallback)
-      showToast('Đang xử lý ảnh (Chế độ Offline)...', 'info', 3000);
-      if (!window.Tesseract) {
-        showToast('Thư viện quét chữ chưa tải xong, vui lòng thử lại sau giây lát!', 'warning');
-        return;
-      }
-      
-      showToast('Đang nhận dạng tọa độ... Vui lòng giữ mạng ổn định!', 'info', 5000);
-      var worker = await Tesseract.createWorker('eng');
-      
-      // TỐI ƯU HÓA ĐẶC BIỆT CHO BẢNG SỐ LIỆU (OFFLINE)
-      await worker.setParameters({
-        // PSM 6 (SINGLE_BLOCK): Ép Tesseract đọc từ trái sang phải, từ trên xuống dưới
-        tessedit_pageseg_mode: '6',
-        preserve_interword_spaces: '1',
-        // CHỈ cho phép các ký tự xuất hiện trong bảng tọa độ (chặn rác)
-        tessedit_char_whitelist: '0123456789., XYxyPTtNnEem'
-      });
-
+      showToast('Đang nhận dạng tọa độ...', 'info', 4000);
       var res = await worker.recognize(processedImage);
-      await worker.terminate();
-
-      var text = res.data.text;
-      parseOcrText(text);
+      parseOcrText(res.data.text);
     }
   } catch (err) {
     console.error(err);
+    // Worker lỗi → reset để lần sau tạo lại
+    if (_ocrWorker) { _ocrWorker.terminate().catch(function(){}); }
+    _ocrWorker = null;
+    _ocrWorkerReady = false;
     showToast('Lỗi đọc ảnh: ' + err.message, 'error', 6000);
   } finally {
     if (btn) btn.disabled = false;
@@ -547,13 +596,6 @@ async function onSoDoOcrUpload(e) {
 }
 
 function parseOcrText(text) {
-  var debugContainer = document.getElementById('ocr-debug-container');
-  var debugText = document.getElementById('ocr-debug-text');
-  if (debugContainer && debugText) {
-    debugContainer.style.display = 'block';
-    debugText.value = text;
-  }
-
   // Fix các lỗi nhận diện điển hình của Tesseract đối với số
   var cleanText = text
     .replace(/,/g, '.')
