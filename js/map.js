@@ -183,21 +183,7 @@ function drawLandPlot(wgs84Points, label) {
     coords.push(coords[0]);
     try { area = turf.area(turf.polygon([coords])); } catch(e){}
     
-    /* Centroid label (chỉ cho polygon) */
-    try {
-      var centroid = turf.centroid(turf.polygon([coords]));
-      var clat = centroid.geometry.coordinates[1], clon = centroid.geometry.coordinates[0];
-      var areaText = area < 10000 ? formatCoordNum(area,2)+' m²' : formatCoordNum(area/10000,4)+' ha';
-      var labelIcon = L.divIcon({
-        className:'',
-        html:'<div style="background:rgba(255,107,53,.9);color:#fff;padding:5px 10px;border-radius:6px;'+
-             'font-size:12px;font-weight:700;font-family:Inter,sans-serif;white-space:nowrap;'+
-             'border:1px solid rgba(255,255,255,.5);box-shadow:0 2px 8px rgba(0,0,0,.4);text-align:center">'+
-             (label?'<div>'+label+'</div>':'')+'<div>📐 '+areaText+'</div></div>',
-        iconAnchor:[60,20]
-      });
-      _plotMarkers.push(L.marker([clat,clon],{icon:labelIcon,zIndexOffset:500}).addTo(_map));
-    } catch(e){}
+    /* Removed centroid label to avoid obscuring the map on mobile */
   }
 
   // Zoom fit map
