@@ -40,7 +40,7 @@ export default {
         : `data:image/png;base64,${imageBase64}`;
 
       const payload = {
-        model: "llama-3.2-90b-vision-preview", // Hoặc "llama-3.2-11b-vision-preview"
+        model: "llama-3.2-11b-vision-preview", // 11B thường được mở free tier, 90B hay bị lỗi 403 Forbidden
         messages: [
           {
             role: "user",
