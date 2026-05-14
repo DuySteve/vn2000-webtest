@@ -726,7 +726,10 @@ async function onSoDoOcrUpload(e) {
       var response = await fetch(OCR_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: processedImage.primary })
+        body: JSON.stringify({ 
+          imageBase64: processedImage.primary,
+          model: 'llama-3.2-90b-vision-preview' // Thử model 90B
+        })
       });
       var result = await response.json();
       if (!result.success) throw new Error(result.error);

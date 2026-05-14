@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       : `data:image/png;base64,${imageBase64}`;
 
     const payload = {
-      model: "meta-llama/llama-4-scout-17b-16e-instruct", // Model Scout mạnh mẽ nhất của Groq hiện tại
+      model: req.body.model || "llama-3.2-90b-vision-preview",
       messages: [
         {
           role: "user",
