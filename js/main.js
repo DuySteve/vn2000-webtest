@@ -608,17 +608,20 @@ function parseOcrText(text) {
       .replace(/(\d)\s*\.\s*(\d)/g, '$1.$2');
   });
 
-  /* ── Bước 2: Khôi phục "decimal bị đọc thành space" ── */
-  // Đây là lỗi phổ biến nhất: "2363228 565" thay vì "2363228.565"
-  // Tesseract đọc dấu chấm mảnh (in nhỏ) thành khoảng trắng
+  /* ── Bước 2: Khôi phục "decimal bị đọc thành space hoặc phẩy" ── */
+  // Lỗi phổ biến nhất: "2363228 565" hoặc "2363228,565" thay vì "2363228.565"
   lines = lines.map(function(line) {
-    // Trường hợp X: 7 chữ số + space + 3 chữ số → X.YYY
+    // Phẩy thay dấu thập phân trong số tọa độ dài (7 chữ số + phẩy + 3 chữ số)
+    line = line.replace(/\b(\d{7}),(\d{3})\b/g, '$1.$2');
+    // Phẩy thay dấu thập phân cho Easting (6 chữ số + phẩy + 3 chữ số)
+    line = line.replace(/\b(\d{6}),(\d{3})\b/g, function(m, a, b) {
+      return (parseFloat(a) >= 100000 && parseFloat(a) <= 900000) ? a + '.' + b : m;
+    });
+    // Space thay dấu thập phân: "2363228 565" → "2363228.565"
     line = line.replace(/\b(\d{7})\s+(\d{3})\b/g, '$1.$2');
-    // Trường hợp Y: 6 chữ số + space + 3 chữ số → X.YYY
+    // Space thay dấu thập phân cho Easting: "520031 694" → "520031.694"
     line = line.replace(/\b(\d{6})\s+(\d{3})\b/g, function(m, a, b) {
-      var val = parseFloat(a);
-      // Chỉ nối nếu phần đầu là Easting hợp lệ (100k - 900k)
-      return (val >= 100000 && val <= 900000) ? a + '.' + b : m;
+      return (parseFloat(a) >= 100000 && parseFloat(a) <= 900000) ? a + '.' + b : m;
     });
     return line;
   });
