@@ -523,65 +523,126 @@ function preprocessImageForOCR(file) {
       var data = imageData.data;
       var w = canvas.width, h = canvas.height;
 
-      // Grayscale
+      // ── Bước 1: Phát hiện màu nền (lấy mẫu 4 góc ảnh) ──
+      // Tài liệu VN thường có nền hồng/đỏ họa tiết (sổ đỏ) hoặc nền trắng.
+      var SAMP = Math.floor(Math.min(w, h) * 0.06); // ~6% ảnh
+      var rS = 0, gS = 0, bS = 0, nS = 0;
+      var sampRegions = [
+        [0, SAMP, 0, SAMP], [w - SAMP, w, 0, SAMP],
+        [0, SAMP, h - SAMP, h], [w - SAMP, w, h - SAMP, h]
+      ];
+      sampRegions.forEach(function(r) {
+        for (var sy = r[2]; sy < r[3]; sy += 3) {
+          for (var sx = r[0]; sx < r[1]; sx += 3) {
+            var pi = (sy * w + sx) * 4;
+            rS += data[pi]; gS += data[pi+1]; bS += data[pi+2]; nS++;
+          }
+        }
+      });
+      var bgR = rS/nS, bgG = gS/nS, bgB = bS/nS;
+      // Chroma > 25 → nền có màu rõ ràng (hồng, vàng, v.v.)
+      var bgChroma = Math.max(bgR, bgG, bgB) - Math.min(bgR, bgG, bgB);
+      var isColoredBg = bgChroma > 25;
+
+      // ── Bước 2: Grayscale thích nghi theo màu nền ──
+      // Nền có màu: dùng min(R,G,B) → loại bỏ màu nền hiệu quả hơn luminance
+      // Nền trắng/xám: dùng luminance tiêu chuẩn
       var gray = new Uint8Array(w * h);
       for (var i = 0; i < data.length; i += 4) {
-        gray[i >> 2] = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+        var pi2 = i >> 2;
+        if (isColoredBg) {
+          // min(R,G,B) cho nền hồng: văn bản đen luôn có min thấp,
+          // còn nền hồng có min = kênh B (thấp hơn R nhưng vẫn cao hơn text)
+          gray[pi2] = Math.min(data[i], data[i+1], data[i+2]);
+        } else {
+          gray[pi2] = Math.round(0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2]);
+        }
       }
 
-      // Bước 1b: Median 3x3 blur để giảm nhiễu hạt muối tiêu trước khi threshold
-      // (không làm mờ text, chỉ loại điểm ảnh lẻ do glare/bụi)
+      // ── Bước 3: Median 3×3 blur (loại nhiễu hạt, bụi, họa tiết mịn) ──
       var blurred = new Uint8Array(w * h);
       for (var y = 0; y < h; y++) {
         for (var x = 0; x < w; x++) {
           var nb = [];
           for (var dy = -1; dy <= 1; dy++) {
             for (var dx = -1; dx <= 1; dx++) {
-              var nx = Math.min(w-1, Math.max(0, x+dx));
-              var ny = Math.min(h-1, Math.max(0, y+dy));
-              nb.push(gray[ny*w+nx]);
+              nb.push(gray[Math.min(h-1,Math.max(0,y+dy))*w + Math.min(w-1,Math.max(0,x+dx))]);
             }
           }
           nb.sort(function(a,b){return a-b;});
-          blurred[y*w+x] = nb[4]; // median of 9
+          blurred[y*w+x] = nb[4];
         }
       }
 
-      // Bước 2: Bradley-Roth Adaptive Threshold trên ảnh đã blur
-      // - Window lớn hơn cho ảnh chụp gần (text to hơn) → cửa sổ = w/6
-      // - t=0.10 thay vì 0.15 → ít nhạy hơn, xử lý chói/glare tốt hơn
+      // ── Bước 4: Local contrast boost (tăng tương phản cục bộ trước threshold) ──
+      // Với nền có họa tiết, khuếch đại sự khác biệt so với trung bình local
+      if (isColoredBg) {
+        // Dùng box blur nhỏ (~32px) làm "local mean" rồi khuếch đại
+        var boxS = Math.max(16, Math.floor(w / 32));
+        var boxInt = new Float64Array(w * h);
+        for (var y = 0; y < h; y++) {
+          for (var x = 0; x < w; x++) {
+            var idxB = y*w+x;
+            boxInt[idxB] = blurred[idxB]
+              + (x > 0 ? boxInt[idxB-1] : 0)
+              + (y > 0 ? boxInt[idxB-w] : 0)
+              - (x > 0 && y > 0 ? boxInt[idxB-w-1] : 0);
+          }
+        }
+        var boosted = new Uint8Array(w * h);
+        for (var y = 0; y < h; y++) {
+          for (var x = 0; x < w; x++) {
+            var idxB = y*w+x;
+            var x1b = Math.max(0,x-boxS), y1b = Math.max(0,y-boxS);
+            var x2b = Math.min(w-1,x+boxS), y2b = Math.min(h-1,y+boxS);
+            var cntB = (x2b-x1b)*(y2b-y1b);
+            var sumB = boxInt[y2b*w+x2b]
+              - (x1b>0?boxInt[y2b*w+x1b-1]:0)
+              - (y1b>0?boxInt[(y1b-1)*w+x2b]:0)
+              + (x1b>0&&y1b>0?boxInt[(y1b-1)*w+x1b-1]:0);
+            var localMean = sumB / cntB;
+            // Khuếch đại: pixel tối hơn mean → đẩy về 0; sáng hơn → đẩy về 255
+            var diff = blurred[idxB] - localMean;
+            boosted[idxB] = Math.max(0, Math.min(255, Math.round(128 + diff * 2.5)));
+          }
+        }
+        blurred = boosted;
+      }
+
+      // ── Bước 5: Bradley-Roth Adaptive Threshold ──
+      // Nền màu: window nhỏ hơn (w/8) + t thấp (0.08) → loại họa tiết tốt hơn
+      // Nền trắng: window rộng (w/6) + t = 0.10
       var integral = new Float64Array(w * h);
       for (var y = 0; y < h; y++) {
         for (var x = 0; x < w; x++) {
           var idx = y * w + x;
           integral[idx] = blurred[idx]
-            + (x > 0 ? integral[idx - 1] : 0)
-            + (y > 0 ? integral[idx - w] : 0)
-            - (x > 0 && y > 0 ? integral[idx - w - 1] : 0);
+            + (x > 0 ? integral[idx-1] : 0)
+            + (y > 0 ? integral[idx-w] : 0)
+            - (x > 0 && y > 0 ? integral[idx-w-1] : 0);
         }
       }
-      // Window = ~1/6 chiều rộng (rộng hơn → phù hợp với ảnh chụp cận)
-      var s = Math.max(20, Math.floor(w / 6));
-      // t = 0.10: ít nhạy với vùng chói sáng (glare) hơn t=0.15 cũ
-      var t = 0.10;
+      var s = isColoredBg ? Math.max(15, Math.floor(w/8)) : Math.max(20, Math.floor(w/6));
+      var t = isColoredBg ? 0.08 : 0.10;
       var binGray = new Uint8Array(w * h);
       for (var y = 0; y < h; y++) {
         for (var x = 0; x < w; x++) {
           var idx = y * w + x;
-          var x1 = Math.max(0, x-s), y1 = Math.max(0, y-s);
-          var x2 = Math.min(w-1, x+s), y2 = Math.min(h-1, y+s);
-          var cnt = (x2-x1) * (y2-y1);
+          var x1 = Math.max(0,x-s), y1 = Math.max(0,y-s);
+          var x2 = Math.min(w-1,x+s), y2 = Math.min(h-1,y+s);
+          var cnt = (x2-x1)*(y2-y1);
           var sum = integral[y2*w+x2]
-            - (x1>0 ? integral[y2*w+x1-1] : 0)
-            - (y1>0 ? integral[(y1-1)*w+x2] : 0)
-            + (x1>0 && y1>0 ? integral[(y1-1)*w+x1-1] : 0);
-          var v = blurred[idx] * cnt <= sum * (1-t) ? 0 : 255;
+            - (x1>0?integral[y2*w+x1-1]:0)
+            - (y1>0?integral[(y1-1)*w+x2]:0)
+            + (x1>0&&y1>0?integral[(y1-1)*w+x1-1]:0);
+          var v = blurred[idx]*cnt <= sum*(1-t) ? 0 : 255;
           binGray[idx] = v;
           data[idx*4] = data[idx*4+1] = data[idx*4+2] = v;
           data[idx*4+3] = 255;
         }
       }
       ctx.putImageData(imageData, 0, 0);
+
 
       // Phát hiện góc nghiêng từ ảnh đã binarize
       var skew = detectSkewAngle(binGray, w, h);
