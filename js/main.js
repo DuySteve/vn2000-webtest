@@ -596,61 +596,66 @@ async function onSoDoOcrUpload(e) {
 }
 
 function parseOcrText(text) {
-  /* ── Bước 1: Chuẩn hóa text OCR ── */
-  var clean = text
-    // Thay ký tự bị nhầm thành số (chỉ thay trong ngữ cảnh số)
-    .replace(/[oO]/g, '0')
-    .replace(/[lI|]/g, '1')
-    // Chuẩn hóa dấu phân cách thập phân: dấu phẩy giữa số → dấu chấm
-    .replace(/(\d),(\d)/g, '$1.$2')
-    // Xóa dấu chấm phân cách hàng nghìn (VD: 2.363.228 → 2363228)
-    .replace(/(\d)\.(\d{3})\./g, '$1$2.')
-    .replace(/(\d)\.(\d{3})(?!\d)/g, '$1$2')
-    // Khoảng trắng quanh dấu thập phân
-    .replace(/(\d)\s*\.\s*(\d)/g, '$1.$2');
-
-  /* ── Bước 2: Nối số bị OCR cắt ra bởi khoảng trắng trong cùng 1 dòng ── */
-  // Xử lý từng dòng để tránh nối nhầm giữa các dòng
-  var lines = clean.split('\n').map(function(line) {
-    // Nối: "2 363 228" → "2363228", "523 456" → "523456"
-    // Chỉ nối khi tổng chữ số có vẻ là một số tọa độ hợp lệ (6-10 chữ số)
-    return line.replace(/\b(\d{1,4})\s+(\d{3})\s+(\d{3}(?:\.\d+)?)\b/g, '$1$2$3')
-               .replace(/\b(\d{1,3})\s+(\d{3}(?:\.\d+)?)\b/g, function(m, a, b) {
-                 var joined = a + b.replace('.', '');
-                 // Chỉ nối nếu kết quả là tọa độ hợp lệ
-                 return (joined.length >= 6 && joined.length <= 8) ? a + b : m;
-               });
+  /* ── Bước 1: Chuẩn hóa text OCR theo từng dòng ── */
+  var lines = text.split('\n').map(function(line) {
+    return line
+      // Sửa ký tự bị nhầm thành số
+      .replace(/[oO]/g, '0')
+      .replace(/[lI|]/g, '1')
+      // Chuẩn hóa dấu phẩy thập phân VN: chỉ giữa 2 chữ số
+      .replace(/(\d),(\d)/g, '$1.$2')
+      // Xóa khoảng trắng quanh dấu chấm khi nằm giữa số (dấu chấm thập phân bị tách)
+      .replace(/(\d)\s*\.\s*(\d)/g, '$1.$2');
   });
 
-  /* ── Bước 3: Trích xuất tất cả số hợp lệ từng dòng ── */
-  // Regex khớp: số nguyên 5-8 chữ số (có thể có thập phân), hoặc số dính liền 9-11 chữ số
+  /* ── Bước 2: Khôi phục "decimal bị đọc thành space" ── */
+  // Đây là lỗi phổ biến nhất: "2363228 565" thay vì "2363228.565"
+  // Tesseract đọc dấu chấm mảnh (in nhỏ) thành khoảng trắng
+  lines = lines.map(function(line) {
+    // Trường hợp X: 7 chữ số + space + 3 chữ số → X.YYY
+    line = line.replace(/\b(\d{7})\s+(\d{3})\b/g, '$1.$2');
+    // Trường hợp Y: 6 chữ số + space + 3 chữ số → X.YYY
+    line = line.replace(/\b(\d{6})\s+(\d{3})\b/g, function(m, a, b) {
+      var val = parseFloat(a);
+      // Chỉ nối nếu phần đầu là Easting hợp lệ (100k - 900k)
+      return (val >= 100000 && val <= 900000) ? a + '.' + b : m;
+    });
+    return line;
+  });
+
+  /* ── Bước 3: Trích xuất số hợp lệ từng dòng ── */
+  // Nhận: số có 5-8 chữ số nguyên (kèm thập phân tùy chọn), hoặc số liền 9-11 chữ số (thiếu dấu chấm)
   var numRx = /\b(\d{5,8}(?:\.\d{1,4})?|\d{9,11})\b/g;
 
   function fixMissingDecimal(raw) {
-    var s = raw.replace('.', '');
     if (raw.indexOf('.') !== -1) return parseFloat(raw); // Đã có dấu thập phân
-    // Không có dấu thập phân và số dài bất thường → thử khôi phục
-    if (s.length === 10 || (s.length === 11 && s.startsWith('2'))) {
+    var s = raw;
+    // Số 10 chữ số bắt đầu bằng '2' → X Northing: 2XXXXXXX.XXX
+    if (s.length === 10 && s.startsWith('2')) {
       return parseFloat(s.substring(0, 7) + '.' + s.substring(7));
     }
-    if (s.length === 9 || (s.length === 10 && !s.startsWith('2'))) {
+    // Số 9 chữ số → Y Easting: XXXXXX.XXX
+    if (s.length === 9) {
       return parseFloat(s.substring(0, 6) + '.' + s.substring(6));
     }
     return parseFloat(raw);
   }
 
   function classify(val) {
-    if (val >= 800000 && val <= 3000000) return 'X'; // Northing
-    if (val >= 100000 && val <= 900000)  return 'Y'; // Easting
+    // X = Northing VN2000: ~800k - 3M (thực tế Quảng Ninh ~2.3M - 2.5M)
+    if (val >= 800000 && val <= 3000000) return 'X';
+    // Y = Easting VN2000: ~100k - 900k (thực tế ~400k - 650k)
+    if (val >= 100000 && val <= 900000) return 'Y';
     return null;
   }
 
-  /* ── Bước 4: Parse từng dòng thành cặp (X, Y) ── */
+  /* ── Bước 4: Parse từng dòng, ghép cặp X-Y ── */
   var pairedByLine = [];
   var allX = [], allY = [];
 
   lines.forEach(function(line) {
-    var matches = [], m;
+    var matches = [];
+    var m;
     numRx.lastIndex = 0;
     while ((m = numRx.exec(line)) !== null) {
       var val = fixMissingDecimal(m[1]);
@@ -661,37 +666,30 @@ function parseOcrText(text) {
     var xs = matches.filter(function(v) { return v.cls === 'X'; });
     var ys = matches.filter(function(v) { return v.cls === 'Y'; });
 
-    // Thu gom vào pool toàn cục để fallback
     xs.forEach(function(v) { allX.push(v.val); });
     ys.forEach(function(v) { allY.push(v.val); });
 
-    // Cặp chuẩn: 1 dòng có đúng 1 X và 1 Y
     if (xs.length === 1 && ys.length === 1) {
       pairedByLine.push({ x: xs[0].val, y: ys[0].val });
-    }
-    // Nhiều cặp trên 1 dòng (bảng nhiều cột)
-    else if (xs.length > 0 && xs.length === ys.length) {
+    } else if (xs.length > 0 && xs.length === ys.length) {
       for (var i = 0; i < xs.length; i++) {
         pairedByLine.push({ x: xs[i].val, y: ys[i].val });
       }
     }
   });
 
-  /* ── Bước 5: Quyết định kết quả ── */
+  /* ── Bước 5: Chọn kết quả tốt nhất ── */
   var foundPoints = [];
-
   if (pairedByLine.length > 0) {
-    // Ưu tiên kết quả ghép theo dòng (chính xác nhất)
     foundPoints = pairedByLine;
   } else if (allX.length > 0 && allY.length > 0) {
-    // Fallback: ghép theo thứ tự nếu số X = số Y
     var count = Math.min(allX.length, allY.length);
     for (var j = 0; j < count; j++) {
       foundPoints.push({ x: allX[j], y: allY[j] });
     }
   }
 
-  /* ── Bước 6: Loại trùng lặp liên tiếp (tolerance 1m) ── */
+  /* ── Bước 6: Loại điểm trùng liên tiếp (tolerance 1m) ── */
   var uniquePoints = [];
   foundPoints.forEach(function(p) {
     var last = uniquePoints[uniquePoints.length - 1];
@@ -700,9 +698,9 @@ function parseOcrText(text) {
     }
   });
 
-  /* ── Bước 7: Hiển thị kết quả ── */
+  /* ── Bước 7: Hiển thị ── */
   if (uniquePoints.length === 0) {
-    showToast('Không quét được tọa độ hợp lệ. Hãy chụp rõ nét, tránh bị chói!', 'warning', 7000);
+    showToast('Không quét được tọa độ hợp lệ. Hãy chụp thẳng, rõ nét, tránh chói!', 'warning', 7000);
   } else {
     showToast('Đã nhận diện ' + uniquePoints.length + ' điểm tọa độ!', 'success', 5000);
     var list = $('sodo-points-list');
@@ -712,6 +710,7 @@ function parseOcrText(text) {
     drawSoDo();
   }
 }
+
 
 
 function drawSoDo() {
