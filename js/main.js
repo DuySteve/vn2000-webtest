@@ -246,10 +246,10 @@ function drawSoDo() {
   });
 
   var label = ($('sodo-label') && $('sodo-label').value) || 'Thửa đất';
-  var result = drawLandPlot(latLons, label);
+  var result = drawLandPlot(fullPts, label);  // fullPts has {x,y,lat,lon} needed by popup
   var area = result ? result.area : 0;
   var perimeter = result ? result.perimeter : 0;
-  var edges = result ? result.edges : [];
+  var edges = result ? result.edgeLengths : [];  // map.js returns edgeLengths, not edges
 
   state.currentSoDoResult = { points: fullPts, area: area, perimeter: perimeter };
 
