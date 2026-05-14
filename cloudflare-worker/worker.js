@@ -40,7 +40,7 @@ export default {
         : `data:image/png;base64,${imageBase64}`;
 
       const payload = {
-        model: "llama-3.2-11b-vision-preview", // 11B thường được mở free tier, 90B hay bị lỗi 403 Forbidden
+        model: "meta-llama/llama-4-scout-17b-16e-instruct", // Model Scout theo yêu cầu người dùng
         messages: [
           {
             role: "user",
