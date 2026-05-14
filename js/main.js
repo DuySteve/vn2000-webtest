@@ -210,7 +210,7 @@ async function onSoDoOcrUpload(e) {
     if (list) list.innerHTML = '';
     _soDoPointCount = 0;
     points.forEach(function(p) { addSoDoPoint(p.x, p.y); });
-    drawSoDo();
+    setTimeout(drawSoDo, 50); // Run after DOM updates
   } catch(e) {
     showToast('Lỗi đọc ảnh: ' + (e.message || e), 'error', 6000);
   } finally {
@@ -228,9 +228,8 @@ function drawSoDo() {
   var rows = document.querySelectorAll('.sodo-point-row');
   var pts = [];
   rows.forEach(function(row) {
-    var xRaw = (row.querySelector('.sodo-x').value || '').trim().replace(/\./g, '').replace(',', '.');
-    var yRaw = (row.querySelector('.sodo-y').value || '').trim().replace(/\./g, '').replace(',', '.');
-    var x = parseFloat(xRaw), y = parseFloat(yRaw);
+    var x = parseVNCoord(row.querySelector('.sodo-x').value);
+    var y = parseVNCoord(row.querySelector('.sodo-y').value);
     if (!isNaN(x) && !isNaN(y) && x > 0 && y > 0) pts.push({ x: x, y: y });
   });
 
@@ -303,6 +302,33 @@ function copySoDoResult() {
 }
 
 /* ── HELPERS ── */
+
+/**
+ * Parse VN2000 coordinate strings flexibly:
+ * - "2.363.228"   → 2363228   (dots = thousand separators)
+ * - "520031"      → 520031    (plain integer)
+ * - "520031.5"    → 520031.5  (single dot = decimal)
+ * - "520,031"     → 520031    (comma = thousand separator)
+ * - "520031,5"    → 520031.5  (comma = decimal)
+ */
+function parseVNCoord(raw) {
+  var s = (raw || '').trim().replace(/\s/g, '');
+  if (!s) return NaN;
+  var dotCount = (s.match(/\./g) || []).length;
+  var commaCount = (s.match(/,/g) || []).length;
+
+  if (commaCount > 0) {
+    // Comma present: remove dots (thousand separators), replace comma with decimal
+    return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  }
+  if (dotCount > 1) {
+    // Multiple dots → all are thousand separators
+    return parseFloat(s.replace(/\./g, ''));
+  }
+  // Zero or single dot → standard decimal, parse directly
+  return parseFloat(s);
+}
+
 function setText(id, v) { var el = $(id); if (el) el.textContent = v; }
 
 function formatArea(m2) {
