@@ -356,6 +356,8 @@ function initMobilePanel() {
   var isExpanded = false;
   window._setMobilePanelExpanded = function(v) {
     isExpanded = v;
+    panel.style.transition = ''; // Ensure transition is enabled
+    panel.style.height = ''; // Clear inline height so CSS classes take over
     panel.classList.toggle('expanded', v);
     if (fab) fab.classList.toggle('active', v);
     if (fabIcon) fabIcon.textContent = v ? '✕' : '📋';
@@ -394,6 +396,8 @@ function initMobilePanel() {
       var dy = e.changedTouches[0].clientY - startY;
       if (Math.abs(dy) > 40) { // Threshold to toggle
         window._setMobilePanelExpanded(dy < 0);
+      } else if (Math.abs(dy) < 5) { // Treat small movement as a tap/click
+        window._setMobilePanelExpanded(!isExpanded);
       }
     }, { passive: true });
   }
