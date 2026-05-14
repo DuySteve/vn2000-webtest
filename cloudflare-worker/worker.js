@@ -1,15 +1,11 @@
 /**
- * Cloudflare Worker – VN2000 OCR via Google AI Studio API
+ * Cloudflare Worker – VN2000 OCR via Groq API (Llama 3.2 Vision)
  *
  * Env secrets cần cấu hình trên Cloudflare Dashboard:
- *   GEMINI_API_KEY  → API Key lấy từ https://aistudio.google.com/apikey
- *
- * Lý do dùng Worker làm proxy:
- *   - Cloudflare Worker chạy tại datacenter US/EU → tránh geo-block Việt Nam
- *   - API key được bảo mật trong env, không lộ ra frontend
+ *   GROQ_API_KEY  → API Key lấy từ https://console.groq.com
  */
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent';
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 export default {
   async fetch(request, env, ctx) {
@@ -35,17 +31,23 @@ export default {
       if (!imageBase64) throw new Error('Thiếu trường imageBase64 trong request body');
 
       // 2. Lấy API Key
-      const apiKey = env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error('GEMINI_API_KEY chưa được cấu hình trên Cloudflare');
+      const apiKey = env.GROQ_API_KEY;
+      if (!apiKey) throw new Error('GROQ_API_KEY chưa được cấu hình trên Cloudflare');
 
-      // 3. Chuẩn bị payload
-      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      // 3. Chuẩn bị payload cho Groq OpenAI-compatible API
+      const imageUrl = imageBase64.startsWith('data:image') 
+        ? imageBase64 
+        : `data:image/png;base64,${imageBase64}`;
 
       const payload = {
-        contents: [{
-          parts: [
-            {
-              text: `Bạn là chuyên gia trắc địa Việt Nam. Hãy trích xuất TẤT CẢ các cặp tọa độ VN2000 (X, Y) từ bảng tọa độ trong hình ảnh này.
+        model: "llama-3.2-90b-vision-preview", // Hoặc "llama-3.2-11b-vision-preview"
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Bạn là chuyên gia trắc địa Việt Nam. Hãy trích xuất TẤT CẢ các cặp tọa độ VN2000 (X, Y) từ bảng tọa độ trong hình ảnh này.
 
 QUY TẮC:
 - Tọa độ X (Northing) thường từ 800,000 đến 3,000,000
@@ -54,42 +56,44 @@ QUY TẮC:
 - Số thập phân dùng dấu chấm (.)
 
 CHỈ trả về JSON array thuần túy, không có markdown, không có giải thích:
-[{"x": 2363228.12, "y": 520031.45}, {"x": 2363150.00, "y": 520055.78}]`
-            },
-            {
-              inline_data: {
-                mime_type: 'image/jpeg',
-                data: base64Data,
+[{"x": 2363228.12, "y": 520031.45}]`
               },
-            },
-          ],
-        }],
-        generationConfig: {
-          temperature:     0,
-          maxOutputTokens: 2048,
-        },
+              {
+                type: "image_url",
+                image_url: {
+                  url: imageUrl
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0,
+        max_tokens: 2048
       };
 
-      // 4. Gọi Google AI Studio API (Cloudflare Worker chạy tại US/EU → không bị geo-block)
-      const aiRes = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+      // 4. Gọi Groq API
+      const aiRes = await fetch(GROQ_API_URL, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
         body:    JSON.stringify(payload),
       });
 
       if (!aiRes.ok) {
         const errBody = await aiRes.text();
-        throw new Error(`Google AI HTTP ${aiRes.status}: ${errBody}`);
+        throw new Error(`Groq API HTTP ${aiRes.status}: ${errBody}`);
       }
 
       const data = await aiRes.json();
 
       if (data.error) {
-        throw new Error(`Google AI error [${data.error.code}]: ${data.error.message}`);
+        throw new Error(`Groq API error: ${data.error.message}`);
       }
 
       // 5. Parse kết quả
-      const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const aiText = data.choices?.[0]?.message?.content;
       if (!aiText) throw new Error('AI không trả về kết quả. Kiểm tra lại ảnh chụp.');
 
       let coordinates = [];
@@ -128,3 +132,4 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
     }
   },
 };
+

@@ -13,11 +13,11 @@ var state = {
   theme: localStorage.getItem('vn2000_theme') || 'light'
 };
 
-// Hướng dẫn dùng AI OCR qua Vercel Serverless Function (Ví dụ dùng Groq Llama 3.2 Vision):
-// 1. Deploy toàn bộ code này lên Vercel.
-// 2. Cấu hình biến môi trường GROQ_API_KEY trên Vercel.
+// Hướng dẫn dùng AI OCR qua Vercel/Cloudflare Serverless Function (Ví dụ dùng Groq Llama 3.2 Vision):
+// 1. Deploy code Vercel (thư mục api/) hoặc Cloudflare Worker (thư mục cloudflare-worker/).
+// 2. Cấu hình biến môi trường GROQ_API_KEY trên Vercel hoặc Cloudflare Dashboard.
 // 3. Đổi OCR_API_URL = '/api/ocr'; (nếu frontend và API cùng host trên Vercel)
-//    Hoặc OCR_API_URL = 'https://ten-app-cua-ban.vercel.app/api/ocr'; (nếu frontend vẫn ở GitHub Pages)
+//    Hoặc OCR_API_URL = 'https://link-cloudflare-worker-hoac-vercel-cua-ban'; (nếu frontend vẫn ở GitHub Pages)
 var OCR_API_URL = ''; // Để trống ('') sẽ dùng Tesseract.js Offline. Điền URL để dùng AI.
 
 function $(id) { return document.getElementById(id); }
