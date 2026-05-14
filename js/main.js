@@ -529,18 +529,41 @@ function preprocessImageForOCR(file) {
         gray[i >> 2] = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
       }
 
-      // Bradley-Roth Adaptive Threshold
+      // Bước 1b: Median 3x3 blur để giảm nhiễu hạt muối tiêu trước khi threshold
+      // (không làm mờ text, chỉ loại điểm ảnh lẻ do glare/bụi)
+      var blurred = new Uint8Array(w * h);
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          var nb = [];
+          for (var dy = -1; dy <= 1; dy++) {
+            for (var dx = -1; dx <= 1; dx++) {
+              var nx = Math.min(w-1, Math.max(0, x+dx));
+              var ny = Math.min(h-1, Math.max(0, y+dy));
+              nb.push(gray[ny*w+nx]);
+            }
+          }
+          nb.sort(function(a,b){return a-b;});
+          blurred[y*w+x] = nb[4]; // median of 9
+        }
+      }
+
+      // Bước 2: Bradley-Roth Adaptive Threshold trên ảnh đã blur
+      // - Window lớn hơn cho ảnh chụp gần (text to hơn) → cửa sổ = w/6
+      // - t=0.10 thay vì 0.15 → ít nhạy hơn, xử lý chói/glare tốt hơn
       var integral = new Float64Array(w * h);
       for (var y = 0; y < h; y++) {
         for (var x = 0; x < w; x++) {
           var idx = y * w + x;
-          integral[idx] = gray[idx]
+          integral[idx] = blurred[idx]
             + (x > 0 ? integral[idx - 1] : 0)
             + (y > 0 ? integral[idx - w] : 0)
             - (x > 0 && y > 0 ? integral[idx - w - 1] : 0);
         }
       }
-      var s = Math.max(15, Math.floor(w / 8)), t = 0.15;
+      // Window = ~1/6 chiều rộng (rộng hơn → phù hợp với ảnh chụp cận)
+      var s = Math.max(20, Math.floor(w / 6));
+      // t = 0.10: ít nhạy với vùng chói sáng (glare) hơn t=0.15 cũ
+      var t = 0.10;
       var binGray = new Uint8Array(w * h);
       for (var y = 0; y < h; y++) {
         for (var x = 0; x < w; x++) {
@@ -552,7 +575,7 @@ function preprocessImageForOCR(file) {
             - (x1>0 ? integral[y2*w+x1-1] : 0)
             - (y1>0 ? integral[(y1-1)*w+x2] : 0)
             + (x1>0 && y1>0 ? integral[(y1-1)*w+x1-1] : 0);
-          var v = gray[idx] * cnt <= sum * (1-t) ? 0 : 255;
+          var v = blurred[idx] * cnt <= sum * (1-t) ? 0 : 255;
           binGray[idx] = v;
           data[idx*4] = data[idx*4+1] = data[idx*4+2] = v;
           data[idx*4+3] = 255;
@@ -754,20 +777,23 @@ function detectExpectedRowCount(text) {
   }
 
   // Ưu tiên 2: Nếu bị mất cột Điểm, dùng số lượng dòng chứa tọa độ làm mốc kỳ vọng.
-  // Nếu quét ra thiếu điểm so với mốc này, nó sẽ tự động chạy chiến lược fallback.
-  return linesWithCoords > 0 ? linesWithCoords : 0;
+  // Trừ 1 vì bảng VN2000 thường có hàng cuối lặp lại điểm đầu (điểm đóng vòng).
+  // Tối thiểu là 2 để tránh false-positive khi chỉ có 1-2 số tọa độ lẻ.
+  if (linesWithCoords >= 3) return linesWithCoords - 1;
+  return 0;
 }
 
 /* Tách logic trích xuất điểm khỏi render để dùng cho multi-pass */
 function extractPointsFromOcrText(text) {
-  var lines = text.split('\n').map(function(line) {
+  // Bước 0: Chuẩn hóa từng dòng
+  var rawLines = text.split('\n').map(function(line) {
     return line
       .replace(/[oO]/g, '0').replace(/[lI|]/g, '1')
       .replace(/(\d),(\d)/g, '$1.$2')
       .replace(/(\d)\s*\.\s*(\d)/g, '$1.$2');
   });
 
-  lines = lines.map(function(line) {
+  rawLines = rawLines.map(function(line) {
     line = line.replace(/\b(\d{7}),(\d{3})\b/g, '$1.$2');
     line = line.replace(/\b(\d{6}),(\d{3})\b/g, function(m,a,b){ return (parseFloat(a)>=100000&&parseFloat(a)<=900000)?a+'.'+b:m; });
     line = line.replace(/\b(\d{7})\s+(\d{3})\b/g, '$1.$2');
@@ -775,6 +801,7 @@ function extractPointsFromOcrText(text) {
     return line;
   });
 
+  // Khai báo helpers trước vòng lặp merge để dùng được ngay
   var numRx = /\b(\d{5,8}(?:\.\d{1,4})?|\d{9,11})\b/g;
   function fixDec(raw) {
     if (raw.indexOf('.') !== -1) return parseFloat(raw);
@@ -788,14 +815,54 @@ function extractPointsFromOcrText(text) {
     if (v >= 100000 && v <= 900000)  return 'Y';
     return null;
   }
-
-  var paired = [], allX = [], allY = [];
-  lines.forEach(function(line) {
-    var hits = [], m; numRx.lastIndex = 0;
-    while ((m = numRx.exec(line)) !== null) {
-      var v = fixDec(m[1]), c = cls(v);
+  function extractHits(line) {
+    var hits = [], m2; numRx.lastIndex = 0;
+    while ((m2 = numRx.exec(line)) !== null) {
+      var v = fixDec(m2[1]), c = cls(v);
       if (c) hits.push({val:v, cls:c});
     }
+    return hits;
+  }
+
+  // Bước 0b: Gộp các dòng bị vỡ (broken line recovery)
+  // Tesseract đôi khi ngắt một hàng thành hai dòng, ví dụ:
+  //   Dòng A: "2363228.565"  (chỉ có X)
+  //   Dòng B: "520031.694"   (chỉ có Y)
+  // → Ghép lại thành một dòng để parse đúng cặp X-Y.
+  var lines = [];
+  for (var li = 0; li < rawLines.length; li++) {
+    var cur = rawLines[li].trim();
+    if (!cur) { lines.push(''); continue; }
+
+    // Kiểm tra xem dòng hiện tại có ĐÚNG MỘT loại tọa độ (chỉ X hoặc chỉ Y)
+    var tmpHits = extractHits(cur);
+    var hasX = tmpHits.some(function(h){return h.cls==='X';});
+    var hasY = tmpHits.some(function(h){return h.cls==='Y';});
+
+    if ((hasX && !hasY) || (!hasX && hasY)) {
+      // Dòng hiện tại chỉ có X hoặc chỉ Y → thử ghép với dòng tiếp theo
+      var next = li + 1 < rawLines.length ? rawLines[li + 1].trim() : '';
+      if (next) {
+        var nextHits = extractHits(next);
+        var nextHasX = nextHits.some(function(h){return h.cls==='X';});
+        var nextHasY = nextHits.some(function(h){return h.cls==='Y';});
+        // Nếu dòng kế bù đắp thứ còn thiếu → merge
+        if ((hasX && !hasY && !nextHasX && nextHasY) ||
+            (!hasX && hasY && nextHasX && !nextHasY)) {
+          lines.push(cur + ' ' + next);
+          li++; // bỏ qua dòng kế
+          continue;
+        }
+      }
+    }
+    lines.push(cur);
+  }
+
+
+  // Bước 1: Parse từng dòng, ghép cặp X-Y
+  var paired = [], allX = [], allY = [];
+  lines.forEach(function(line) {
+    var hits = extractHits(line);
     var xs = hits.filter(function(h){return h.cls==='X';}),
         ys = hits.filter(function(h){return h.cls==='Y';});
     xs.forEach(function(h){allX.push(h.val);}); ys.forEach(function(h){allY.push(h.val);});
@@ -805,13 +872,14 @@ function extractPointsFromOcrText(text) {
     }
   });
 
+  // Bước 2: Fallback - ghép theo thứ tự toàn bộ tập X và Y
   var found = paired.length > 0 ? paired : (function(){
     var r=[]; var cnt=Math.min(allX.length,allY.length);
     for(var j=0;j<cnt;j++) r.push({x:allX[j],y:allY[j]});
     return r;
   })();
 
-  // Loại trùng liên tiếp
+  // Bước 3: Loại trùng liên tiếp (tolerance 1m)
   var uniq = [];
   found.forEach(function(p){ var last=uniq[uniq.length-1]; if(!last||Math.abs(last.x-p.x)>1||Math.abs(last.y-p.y)>1) uniq.push(p); });
   return uniq;
