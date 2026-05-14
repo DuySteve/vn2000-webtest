@@ -620,24 +620,79 @@ async function onSoDoOcrUpload(e) {
     } else {
       showToast('Đang nhận dạng tọa độ...', 'info', 4000);
 
-      // Lần 1: PSM 6 (Uniform block — tốt nhất cho bảng chuẩn)
-      await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1', tessedit_char_whitelist: '0123456789., ' });
+      // Bước 1: Quét với whitelist đầy đủ (bao gồm chữ cái) để phát hiện số hàng
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6',
+        preserve_interword_spaces: '1',
+        tessedit_char_whitelist: '0123456789., '
+      });
       var res1 = await worker.recognize(processedImage);
-      var pts1 = extractPointsFromOcrText(res1.data.text);
+      var rawText1 = res1.data.text;
 
-      // Lần 2: PSM 11 (Sparse text — tốt hơn cho ảnh nghiêng/cong)
-      // Chỉ chạy nếu lần 1 thiếu điểm
-      if (pts1.length < 3) {
-        showToast('Đang thử lại (chế độ thích nghi)...', 'info', 3000);
-        await worker.setParameters({ tessedit_pageseg_mode: '11', preserve_interword_spaces: '1', tessedit_char_whitelist: '0123456789., ' });
-        var res2 = await worker.recognize(processedImage);
-        var pts2 = extractPointsFromOcrText(res2.data.text);
-        // Khôi phục PSM 6 cho lần sau
-        await worker.setParameters({ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '0123456789., ' });
-        if (pts2.length > pts1.length) { renderOcrPoints(pts2); return; }
+      // Phát hiện số lượng tọa độ kỳ vọng từ cột "Điểm"
+      var expectedCount = detectExpectedRowCount(rawText1);
+      var pts1 = extractPointsFromOcrText(rawText1);
+
+      // Nếu đã đủ → dùng luôn
+      if (expectedCount > 0 && pts1.length >= expectedCount) {
+        renderOcrPoints(pts1);
+        return;
       }
 
-      renderOcrPoints(pts1);
+      // Chiến lược retry: thử tối đa 3 cách khác nhau
+      var bestPts = pts1;
+      var strategies = [
+        // Chiến lược 2: PSM 4 (single column)
+        { psm: '4',  whitelist: '0123456789., ' },
+        // Chiến lược 3: PSM 11 (sparse text — ảnh nghiêng)
+        { psm: '11', whitelist: '0123456789., ' },
+        // Chiến lược 4: PSM 6 không whitelist (cho phép đọc chữ, giúp detect số tốt hơn)
+        { psm: '6',  whitelist: '' }
+      ];
+
+      for (var si = 0; si < strategies.length; si++) {
+        // Dừng nếu đã đủ tọa độ
+        if (expectedCount > 0 && bestPts.length >= expectedCount) break;
+        // Dừng nếu không có expected count nhưng đã có điểm từ lần trước
+        if (expectedCount === 0 && bestPts.length >= 3) break;
+
+        var strat = strategies[si];
+        showToast('Đang thử lại (chiến lược ' + (si + 2) + ')...', 'info', 2000);
+
+        var params = { tessedit_pageseg_mode: strat.psm, preserve_interword_spaces: '1' };
+        if (strat.whitelist) params.tessedit_char_whitelist = strat.whitelist;
+        await worker.setParameters(params);
+
+        var res = await worker.recognize(processedImage);
+        var ptsN = extractPointsFromOcrText(res.data.text);
+
+        // Cập nhật expected count nếu chưa tìm được
+        if (expectedCount === 0) {
+          expectedCount = detectExpectedRowCount(res.data.text);
+        }
+
+        if (ptsN.length > bestPts.length) {
+          bestPts = ptsN;
+        }
+      }
+
+      // Khôi phục PSM 6 + whitelist cho lần quét sau
+      await worker.setParameters({ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '0123456789., ' });
+
+      // Hiển thị kết quả tốt nhất + thông báo nếu vẫn thiếu
+      if (expectedCount > 0 && bestPts.length < expectedCount) {
+        showToast(
+          '⚠️ Chỉ nhận được ' + bestPts.length + '/' + expectedCount +
+          ' điểm. Hãy chụp thẳng và rõ hơn!',
+          'warning', 8000
+        );
+        if (bestPts.length > 0) {
+          renderOcrPoints(bestPts);
+        }
+      } else {
+        renderOcrPoints(bestPts);
+      }
+
     }
   } catch (err) {
     console.error(err);
@@ -650,6 +705,47 @@ async function onSoDoOcrUpload(e) {
   }
 }
 
+/**
+ * Phát hiện số lượng tọa độ kỳ vọng từ cột "Điểm" trong bảng OCR.
+ *
+ * Logic: Với whitelist chỉ có số, OCR sẽ đọc mỗi hàng như:
+ *   "1 2363228.565 520031.694 21.06"
+ * Ta tìm các số nguyên nhỏ (1-99) xuất hiện ở đầu mỗi dòng có tọa độ.
+ * Max unique index = tổng số điểm (hàng cuối lặp lại điểm 1 đóng vòng).
+ */
+function detectExpectedRowCount(text) {
+  var lines = text.split('\n');
+  var indices = {};
+  var maxIndex = 0;
+
+  lines.forEach(function(line) {
+    var trimmed = line.trim();
+    if (!trimmed) return;
+
+    // Dòng hợp lệ: bắt đầu bằng số nhỏ (1-2 chữ số), tiếp theo là số tọa độ lớn
+    // Ví dụ: "1 2363228.565 ..." hoặc "1 2363228 565 ..."
+    var m = trimmed.match(/^(\d{1,2})\s+(\d{6,10})/);
+    if (!m) return;
+
+    var idx = parseInt(m[1]);
+    var coord = parseInt(m[2]);
+
+    // Đảm bảo con số sau là tọa độ thực (X ≥ 100000 hoặc Y ≥ 100000)
+    if (idx >= 1 && idx <= 50 && coord >= 100000) {
+      indices[idx] = true;
+      if (idx > maxIndex) maxIndex = idx;
+    }
+  });
+
+  // Phải có ít nhất 3 điểm liên tiếp để xác nhận là bảng thực
+  var uniqueCount = Object.keys(indices).length;
+  if (uniqueCount < 2 || maxIndex < 2) return 0;
+
+  // Nếu unique values khá liên tục (ví dụ 1,2,3,4,5 → maxIndex=5)
+  // nhưng không nhất thiết phải đủ (ảnh chụp thiếu hàng đầu...)
+  return maxIndex;
+}
+
 /* Tách logic trích xuất điểm khỏi render để dùng cho multi-pass */
 function extractPointsFromOcrText(text) {
   var lines = text.split('\n').map(function(line) {
@@ -658,6 +754,7 @@ function extractPointsFromOcrText(text) {
       .replace(/(\d),(\d)/g, '$1.$2')
       .replace(/(\d)\s*\.\s*(\d)/g, '$1.$2');
   });
+
   lines = lines.map(function(line) {
     line = line.replace(/\b(\d{7}),(\d{3})\b/g, '$1.$2');
     line = line.replace(/\b(\d{6}),(\d{3})\b/g, function(m,a,b){ return (parseFloat(a)>=100000&&parseFloat(a)<=900000)?a+'.'+b:m; });
