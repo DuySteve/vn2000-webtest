@@ -40,7 +40,7 @@ export default async function handler(req) {
       : `data:image/png;base64,${imageBase64}`;
 
     const payload = {
-      model: "llama-3.2-90b-vision-preview", // Có thể đổi thành llama-3.2-11b-vision-preview
+      model: "llama-3.2-11b-vision-preview", // 11B Vision là bản miễn phí ổn định nhất. 90B và Scout bị Groq khoá (403 Forbidden)
       messages: [
         {
           role: "user",
