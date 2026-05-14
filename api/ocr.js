@@ -1,5 +1,6 @@
 export const config = {
-  runtime: 'edge', // Chạy trên Edge Server (US)
+  runtime: 'nodejs', // Bắt buộc dùng Node.js thay vì Edge
+  regions: ['iad1'], // BẮT BUỘC ÉP CHẠY Ở MỸ (Washington D.C) để vượt rào Groq chặn IP Việt Nam
 };
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
