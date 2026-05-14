@@ -236,7 +236,9 @@ function drawSoDo() {
   if (pts.length < 3) { showToast('Cần ít nhất 3 điểm hợp lệ để vẽ thửa đất', 'warning'); return; }
 
   var latLons = pts.map(function(p) {
-    try { return vn2000TM3ToWGS84(p.x, p.y, cm); } catch(e) { return null; }
+    // Trong sổ đỏ VN: X = Northing (7 chữ số), Y = Easting (6 chữ số)
+    // proj4 TM nhận [Easting, Northing] = [Y, X]
+    try { return vn2000TM3ToWGS84(p.y, p.x, cm); } catch(e) { return null; }
   }).filter(Boolean);
 
   if (latLons.length < 3) { showToast('Tọa độ không hợp lệ, kiểm tra lại X/Y và tỉnh/thành', 'error'); return; }
