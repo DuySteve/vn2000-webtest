@@ -777,8 +777,8 @@ async function onSoDoOcrUpload(e) {
         var ptsN = extractPointsFromOcrText(rawN);
         if (expectedCount === 0) expectedCount = detectExpectedRowCount(rawN);
 
-        // Nếu ảnh phụ cho nhiều điểm hơn, merge để vét đủ
-        if (ptsN.length > bestPts.length) bestPts = ptsN;
+        // Merge theo chỉ số hàng (không chỉ lấy bên nhiều điểm hơn)
+        bestPts = mergeOcrResults(bestPts, ptsN);
       }
 
       // Khôi phục PSM mặc định
@@ -859,17 +859,19 @@ function detectExpectedRowCount(text) {
   return 0;
 }
 
-/* Tách logic trích xuất điểm khỏi render để dùng cho multi-pass */
+/* Trích xuất điểm từ text OCR, kết hợp chỉ số hàng để đảm bảo thứ tự đúng.
+ * Trả về {indexed: {rowNum: {x,y}}, ordered: [{x,y}...]}
+ * - indexed: điểm đã biết vị trí hàng (từ cột "Số hiệu đỉnh thửa")
+ * - ordered: danh sách cuối đã sort theo chỉ số hàng
+ */
 function extractPointsFromOcrText(text) {
-  // Bước 0: Chuẩn hóa từng dòng
+  // ── Bước 0: Chuẩn hoá ──
   var rawLines = text.split('\n').map(function(line) {
     return line
       .replace(/[oO]/g, '0').replace(/[lI|]/g, '1')
       .replace(/(\d),(\d)/g, '$1.$2')
       .replace(/(\d)\s*\.\s*(\d)/g, '$1.$2');
-  });
-
-  rawLines = rawLines.map(function(line) {
+  }).map(function(line) {
     line = line.replace(/\b(\d{7}),(\d{3})\b/g, '$1.$2');
     line = line.replace(/\b(\d{6}),(\d{3})\b/g, function(m,a,b){ return (parseFloat(a)>=100000&&parseFloat(a)<=900000)?a+'.'+b:m; });
     line = line.replace(/\b(\d{7})\s+(\d{3})\b/g, '$1.$2');
@@ -877,7 +879,7 @@ function extractPointsFromOcrText(text) {
     return line;
   });
 
-  // Khai báo helpers trước vòng lặp merge để dùng được ngay
+  // ── Helpers ──
   var numRx = /\b(\d{5,8}(?:\.\d{1,4})?|\d{9,11})\b/g;
   function fixDec(raw) {
     if (raw.indexOf('.') !== -1) return parseFloat(raw);
@@ -900,66 +902,137 @@ function extractPointsFromOcrText(text) {
     return hits;
   }
 
-  // Bước 0b: Gộp các dòng bị vỡ (broken line recovery)
-  // Tesseract đôi khi ngắt một hàng thành hai dòng, ví dụ:
-  //   Dòng A: "2363228.565"  (chỉ có X)
-  //   Dòng B: "520031.694"   (chỉ có Y)
-  // → Ghép lại thành một dòng để parse đúng cặp X-Y.
+  // ── Bước 0b: Gộp dòng bị vỡ ──
   var lines = [];
   for (var li = 0; li < rawLines.length; li++) {
-    var cur = rawLines[li].trim();
-    if (!cur) { lines.push(''); continue; }
-
-    // Kiểm tra xem dòng hiện tại có ĐÚNG MỘT loại tọa độ (chỉ X hoặc chỉ Y)
-    var tmpHits = extractHits(cur);
-    var hasX = tmpHits.some(function(h){return h.cls==='X';});
-    var hasY = tmpHits.some(function(h){return h.cls==='Y';});
-
+    var cur = rawLines[li].trim(); if (!cur) { lines.push(''); continue; }
+    var tmpH = extractHits(cur);
+    var hasX = tmpH.some(function(h){return h.cls==='X';}),
+        hasY = tmpH.some(function(h){return h.cls==='Y';});
     if ((hasX && !hasY) || (!hasX && hasY)) {
-      // Dòng hiện tại chỉ có X hoặc chỉ Y → thử ghép với dòng tiếp theo
-      var next = li + 1 < rawLines.length ? rawLines[li + 1].trim() : '';
+      var next = li+1 < rawLines.length ? rawLines[li+1].trim() : '';
       if (next) {
-        var nextHits = extractHits(next);
-        var nextHasX = nextHits.some(function(h){return h.cls==='X';});
-        var nextHasY = nextHits.some(function(h){return h.cls==='Y';});
-        // Nếu dòng kế bù đắp thứ còn thiếu → merge
-        if ((hasX && !hasY && !nextHasX && nextHasY) ||
-            (!hasX && hasY && nextHasX && !nextHasY)) {
-          lines.push(cur + ' ' + next);
-          li++; // bỏ qua dòng kế
-          continue;
+        var nH = extractHits(next);
+        var nHX = nH.some(function(h){return h.cls==='X';}),
+            nHY = nH.some(function(h){return h.cls==='Y';});
+        if ((hasX&&!hasY&&!nHX&&nHY)||(!hasX&&hasY&&nHX&&!nHY)) {
+          lines.push(cur+' '+next); li++; continue;
         }
       }
     }
     lines.push(cur);
   }
 
+  // ── Bước 1: Parse có chỉ số hàng ──
+  var indexed = {}; // {rowNum: {x,y}} — từ cột "Số hiệu"
+  var unindexed = []; // không có chỉ số
+  var allX = [], allY = [];
 
-  // Bước 1: Parse từng dòng, ghép cặp X-Y
-  var paired = [], allX = [], allY = [];
   lines.forEach(function(line) {
     var hits = extractHits(line);
     var xs = hits.filter(function(h){return h.cls==='X';}),
         ys = hits.filter(function(h){return h.cls==='Y';});
-    xs.forEach(function(h){allX.push(h.val);}); ys.forEach(function(h){allY.push(h.val);});
-    if (xs.length===1 && ys.length===1) { paired.push({x:xs[0].val, y:ys[0].val}); }
-    else if (xs.length>0 && xs.length===ys.length) {
-      for (var i=0;i<xs.length;i++) paired.push({x:xs[i].val, y:ys[i].val});
+    xs.forEach(function(h){allX.push(h.val);});
+    ys.forEach(function(h){allY.push(h.val);});
+
+    if (xs.length===1 && ys.length===1) {
+      // Cố trích chỉ số hàng (1-2 chữ số đứng đầu dòng)
+      var m = line.trim().match(/^(\d{1,2})[\s\.]/);
+      var rowIdx = m ? parseInt(m[1]) : null;
+      if (rowIdx !== null && rowIdx >= 1 && rowIdx <= 50) {
+        // Đánh ưu tiên: nếu đã có, giữ cả hai (lần này có thể là closing row)
+        if (!indexed[rowIdx]) {
+          indexed[rowIdx] = {x:xs[0].val, y:ys[0].val};
+        } else {
+          unindexed.push({x:xs[0].val, y:ys[0].val});
+        }
+      } else {
+        unindexed.push({x:xs[0].val, y:ys[0].val});
+      }
+    } else if (xs.length>0 && xs.length===ys.length) {
+      for (var i=0;i<xs.length;i++) unindexed.push({x:xs[i].val, y:ys[i].val});
     }
   });
 
-  // Bước 2: Fallback - ghép theo thứ tự toàn bộ tập X và Y
-  var found = paired.length > 0 ? paired : (function(){
-    var r=[]; var cnt=Math.min(allX.length,allY.length);
-    for(var j=0;j<cnt;j++) r.push({x:allX[j],y:allY[j]});
-    return r;
-  })();
+  // ── Bước 2: Xây dựng kết quả có thứ tự ──
+  var keys = Object.keys(indexed).map(Number).sort(function(a,b){return a-b;});
+  var found = keys.map(function(k){return indexed[k];});
 
-  // Bước 3: Loại trùng liên tiếp (tolerance 1m)
+  if (found.length === 0) {
+    // Fallback: không có chỉ số hàng → dùng unindexed hoặc allX/allY
+    if (unindexed.length > 0) {
+      found = unindexed;
+    } else {
+      var cnt = Math.min(allX.length, allY.length);
+      for (var j=0; j<cnt; j++) found.push({x:allX[j], y:allY[j]});
+    }
+  } else {
+    // Thêm unindexed vào cuối nếu chưa có trong indexed
+    unindexed.forEach(function(p) {
+      if (!found.some(function(r){return Math.abs(r.x-p.x)<5 && Math.abs(r.y-p.y)<5;})) {
+        found.push(p);
+      }
+    });
+  }
+
+  // ── Bước 3: Loại trùng liên tiếp ──
   var uniq = [];
-  found.forEach(function(p){ var last=uniq[uniq.length-1]; if(!last||Math.abs(last.x-p.x)>1||Math.abs(last.y-p.y)>1) uniq.push(p); });
+  found.forEach(function(p){
+    var last=uniq[uniq.length-1];
+    if(!last||Math.abs(last.x-p.x)>1||Math.abs(last.y-p.y)>1) uniq.push(p);
+  });
+
+  // Trả về cả indexed để dùng cho merge
+  uniq._indexed = indexed;
   return uniq;
 }
+
+/**
+ * Merge kết quả từ nhiều lần chạy OCR.
+ * Dùng indexed (chỉ số hàng) để merge chính xác theo thứ tự bảng.
+ * Với chỉ số hàng bị thiếu ở lần 1 nhưng có ở lần 2 → điền vào.
+ */
+function mergeOcrResults(primary, secondary) {
+  var mergedIdx = {};
+  // Lấy indexed từ primary
+  if (primary._indexed) {
+    Object.keys(primary._indexed).forEach(function(k){ mergedIdx[k] = primary._indexed[k]; });
+  }
+  // Bổ sung từ secondary
+  if (secondary && secondary._indexed) {
+    Object.keys(secondary._indexed).forEach(function(k){
+      if (!mergedIdx[k]) mergedIdx[k] = secondary._indexed[k];
+    });
+  }
+
+  // Nếu cả 2 không có indexed, chỉ lấy bên nhiều điểm hơn
+  if (Object.keys(mergedIdx).length === 0) {
+    return primary.length >= (secondary ? secondary.length : 0) ? primary : secondary;
+  }
+
+  // Xây dựng kết quả cuối theo thứ tự chỉ số hàng
+  var keys = Object.keys(mergedIdx).map(Number).sort(function(a,b){return a-b;});
+  var merged = keys.map(function(k){return mergedIdx[k];});
+
+  // Thêm các điểm unindexed không có trong merged (từ cả 2)
+  [primary, secondary].forEach(function(pts){
+    if (!pts) return;
+    pts.forEach(function(p){
+      if (!merged.some(function(r){return Math.abs(r.x-p.x)<5&&Math.abs(r.y-p.y)<5;})){
+        merged.push(p);
+      }
+    });
+  });
+
+  // Dedup liên tiếp
+  var uniq = [];
+  merged.forEach(function(p){
+    var last=uniq[uniq.length-1];
+    if(!last||Math.abs(last.x-p.x)>1||Math.abs(last.y-p.y)>1) uniq.push(p);
+  });
+  return uniq;
+}
+
 
 function renderOcrPoints(pts) {
   if (pts.length === 0) {
