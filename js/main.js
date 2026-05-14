@@ -18,7 +18,7 @@ var state = {
 // 2. Cấu hình biến môi trường GROQ_API_KEY trên Vercel hoặc Cloudflare Dashboard.
 // 3. Đổi OCR_API_URL = '/api/ocr'; (nếu frontend và API cùng host trên Vercel)
 //    Hoặc OCR_API_URL = 'https://link-cloudflare-worker-hoac-vercel-cua-ban'; (nếu frontend vẫn ở GitHub Pages)
-var OCR_API_URL = ''; // Để trống ('') sẽ dùng Tesseract.js Offline. Điền URL để dùng AI.
+var OCR_API_URL = 'https://falling-cake-6be3.buibangduy15112004.workers.dev'; // Trỏ tới Cloudflare Worker dùng Groq API
 
 function $(id) { return document.getElementById(id); }
 
