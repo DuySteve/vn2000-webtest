@@ -523,16 +523,29 @@ function preprocessImageForOCR(file) {
       var data = imageData.data;
       var w = canvas.width, h = canvas.height;
 
-      // ── B1: Phát hiện màu nền (sample 4 góc) ──
-      var SAMP = Math.max(60, Math.floor(Math.min(w, h) * 0.06));
-      var rS=0, gS=0, bS=0, nS=0;
-      [[0,SAMP,0,SAMP],[w-SAMP,w,0,SAMP],[0,SAMP,h-SAMP,h],[w-SAMP,w,h-SAMP,h]].forEach(function(r){
-        for(var sy=r[2];sy<r[3];sy+=3) for(var sx=r[0];sx<r[1];sx+=3){
-          var pi=(sy*w+sx)*4; rS+=data[pi];gS+=data[pi+1];bS+=data[pi+2];nS++;
+      // ── B1: Phát hiện màu nền ──
+      // Sample toàn bộ VIỀN ảnh (không chỉ 4 góc) để chống sai khi ảnh bị cắt,
+      // khiến góc ảnh là ô trắng của bảng chứ không phải nền thực.
+      var EDGE = Math.max(30, Math.floor(Math.min(w, h) * 0.04));
+      var chromaSum = 0, chromaN = 0;
+      // Duyệt 4 cạnh (step=4 để nhanh)
+      for(var y=0;y<h;y+=4){
+        for(var ex=0;ex<EDGE;ex++){
+          var pl=(y*w+ex)*4, pr=(y*w+(w-1-ex))*4;
+          chromaSum += Math.max(data[pl],data[pl+1],data[pl+2]) - Math.min(data[pl],data[pl+1],data[pl+2]);
+          chromaSum += Math.max(data[pr],data[pr+1],data[pr+2]) - Math.min(data[pr],data[pr+1],data[pr+2]);
+          chromaN += 2;
         }
-      });
-      var bgChroma = Math.max(rS,gS,bS)/nS - Math.min(rS,gS,bS)/nS;
-      var isColoredBg = bgChroma > 20;
+      }
+      for(var x=0;x<w;x+=4){
+        for(var ey=0;ey<EDGE;ey++){
+          var pt=(ey*w+x)*4, pb=((h-1-ey)*w+x)*4;
+          chromaSum += Math.max(data[pt],data[pt+1],data[pt+2]) - Math.min(data[pt],data[pt+1],data[pt+2]);
+          chromaSum += Math.max(data[pb],data[pb+1],data[pb+2]) - Math.min(data[pb],data[pb+1],data[pb+2]);
+          chromaN += 2;
+        }
+      }
+      var isColoredBg = (chromaSum / chromaN) > 12; // avg chroma trên viền > 12 = nền có màu
 
       // ── B2: Grayscale ──
       // Nền màu → min(R,G,B): loại tông màu, giữ độ đậm của mực in
@@ -601,6 +614,40 @@ function preprocessImageForOCR(file) {
         }
       }
       ctx.putImageData(imageData, 0, 0);
+
+      // ── B4b: Morphological Opening (Erosion → Dilation) ──
+      // Xóa các điểm nhiễu đơn lẻ từ họa tiết nền còn sót sau Otsu.
+      // Chỉ áp dụng cho nền màu (nền trắng không cần).
+      if(isColoredBg){
+        var eroded = new Uint8Array(w*h);
+        for(var y=0;y<h;y++) for(var x=0;x<w;x++){
+          var c=y*w+x;
+          if(binGray[c]===0){
+            // Erosion: pixel đen chỉ giữ nếu ít nhất 3/4 láng giềng cũng đen
+            var nb4 = (binGray[Math.max(0,y-1)*w+x]===0?1:0)
+                    + (binGray[Math.min(h-1,y+1)*w+x]===0?1:0)
+                    + (binGray[y*w+Math.max(0,x-1)]===0?1:0)
+                    + (binGray[y*w+Math.min(w-1,x+1)]===0?1:0);
+            eroded[c] = nb4>=2 ? 0 : 255; // giữ nếu có >=2 hàng xóm đen
+          } else { eroded[c]=255; }
+        }
+        // Dilation: khôi phục phần text đã bị erosion làm mỏng
+        for(var y=0;y<h;y++) for(var x=0;x<w;x++){
+          var c=y*w+x;
+          if(eroded[c]===0){
+            binGray[c]=0;
+            binGray[Math.max(0,y-1)*w+x]=0;
+            binGray[Math.min(h-1,y+1)*w+x]=0;
+            binGray[y*w+Math.max(0,x-1)]=0;
+            binGray[y*w+Math.min(w-1,x+1)]=0;
+          }
+        }
+        // Cập nhật lại imageData
+        for(var i=0;i<w*h;i++){
+          data[i*4]=data[i*4+1]=data[i*4+2]=binGray[i]; data[i*4+3]=255;
+        }
+        ctx.putImageData(imageData, 0, 0);
+      }
 
       // ── B5: Tạo ảnh phụ (nền màu → dùng luminance + Bradley-Roth để retry) ──
       // Nếu Otsu bỏ sót một số điểm, ảnh phụ sẽ được dùng để bù vào.
