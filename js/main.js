@@ -596,94 +596,123 @@ async function onSoDoOcrUpload(e) {
 }
 
 function parseOcrText(text) {
-  // Fix các lỗi nhận diện điển hình của Tesseract đối với số
-  var cleanText = text
-    .replace(/,/g, '.')
+  /* ── Bước 1: Chuẩn hóa text OCR ── */
+  var clean = text
+    // Thay ký tự bị nhầm thành số (chỉ thay trong ngữ cảnh số)
     .replace(/[oO]/g, '0')
-    .replace(/[sS]/g, '5')
     .replace(/[lI|]/g, '1')
-    .replace(/[zZ]/g, '2')
-    .replace(/[bB]/g, '8');
-    
-  // Xóa khoảng trắng vô tình lọt vào quanh dấu thập phân (VD: "105 . 85" -> "105.85")
-  cleanText = cleanText.replace(/\s*([.])\s*/g, '$1');
-  
-  // Nối các chữ số bị ngăn cách bởi khoảng trắng ngẫu nhiên (ví dụ: "2 363 228" -> "2363228")
-  cleanText = cleanText.replace(/(\d)\s+(?=\d{2,3}\b)/g, '$1');
+    // Chuẩn hóa dấu phân cách thập phân: dấu phẩy giữa số → dấu chấm
+    .replace(/(\d),(\d)/g, '$1.$2')
+    // Xóa dấu chấm phân cách hàng nghìn (VD: 2.363.228 → 2363228)
+    .replace(/(\d)\.(\d{3})\./g, '$1$2.')
+    .replace(/(\d)\.(\d{3})(?!\d)/g, '$1$2')
+    // Khoảng trắng quanh dấu thập phân
+    .replace(/(\d)\s*\.\s*(\d)/g, '$1.$2');
 
-  var regex = /\b\d{5,8}(?:[.,]\d{1,4})?\b|\b\d{9,11}\b/g;
-  
-  // Cách 1: Thử parse theo dòng trước
-  var lines = cleanText.split('\n');
+  /* ── Bước 2: Nối số bị OCR cắt ra bởi khoảng trắng trong cùng 1 dòng ── */
+  // Xử lý từng dòng để tránh nối nhầm giữa các dòng
+  var lines = clean.split('\n').map(function(line) {
+    // Nối: "2 363 228" → "2363228", "523 456" → "523456"
+    // Chỉ nối khi tổng chữ số có vẻ là một số tọa độ hợp lệ (6-10 chữ số)
+    return line.replace(/\b(\d{1,4})\s+(\d{3})\s+(\d{3}(?:\.\d+)?)\b/g, '$1$2$3')
+               .replace(/\b(\d{1,3})\s+(\d{3}(?:\.\d+)?)\b/g, function(m, a, b) {
+                 var joined = a + b.replace('.', '');
+                 // Chỉ nối nếu kết quả là tọa độ hợp lệ
+                 return (joined.length >= 6 && joined.length <= 8) ? a + b : m;
+               });
+  });
+
+  /* ── Bước 3: Trích xuất tất cả số hợp lệ từng dòng ── */
+  // Regex khớp: số nguyên 5-8 chữ số (có thể có thập phân), hoặc số dính liền 9-11 chữ số
+  var numRx = /\b(\d{5,8}(?:\.\d{1,4})?|\d{9,11})\b/g;
+
+  function fixMissingDecimal(raw) {
+    var s = raw.replace('.', '');
+    if (raw.indexOf('.') !== -1) return parseFloat(raw); // Đã có dấu thập phân
+    // Không có dấu thập phân và số dài bất thường → thử khôi phục
+    if (s.length === 10 || (s.length === 11 && s.startsWith('2'))) {
+      return parseFloat(s.substring(0, 7) + '.' + s.substring(7));
+    }
+    if (s.length === 9 || (s.length === 10 && !s.startsWith('2'))) {
+      return parseFloat(s.substring(0, 6) + '.' + s.substring(6));
+    }
+    return parseFloat(raw);
+  }
+
+  function classify(val) {
+    if (val >= 800000 && val <= 3000000) return 'X'; // Northing
+    if (val >= 100000 && val <= 900000)  return 'Y'; // Easting
+    return null;
+  }
+
+  /* ── Bước 4: Parse từng dòng thành cặp (X, Y) ── */
   var pairedByLine = [];
-  var xs = [], ys = []; // Để fallback
-  var foundPoints = [];
+  var allX = [], allY = [];
 
   lines.forEach(function(line) {
-    var lineMatches = line.match(regex) || [];
-    var lxs = [], lys = [];
-    lineMatches.forEach(function(m) {
-      var val = parseFloat(m.replace(',', '.'));
-      
-      // Khôi phục dấu chấm thập phân nếu OCR đọc thiếu (rất hay xảy ra)
-      // Ví dụ OCR đọc 2363228.565 thành 2363228565 (10 số)
-      if (m.indexOf('.') === -1 && m.indexOf(',') === -1 && m.length >= 9) {
-        if (m.length === 10 || (m.length === 11 && m.startsWith('2'))) {
-          // Tọa độ X (Northing) luôn có 7 số phần nguyên
-          val = parseFloat(m.substring(0, 7) + '.' + m.substring(7));
-        } else if (m.length === 9 || (m.length === 10 && !m.startsWith('2'))) {
-          // Tọa độ Y (Easting) luôn có 6 số phần nguyên
-          val = parseFloat(m.substring(0, 6) + '.' + m.substring(6));
-        }
-      }
+    var matches = [], m;
+    numRx.lastIndex = 0;
+    while ((m = numRx.exec(line)) !== null) {
+      var val = fixMissingDecimal(m[1]);
+      var cls = classify(val);
+      if (cls) matches.push({ val: val, cls: cls });
+    }
 
-      if (val >= 800000 && val <= 3000000) { lxs.push(val); xs.push(val); }
-      else if (val >= 100000 && val <= 900000) { lys.push(val); ys.push(val); }
-    });
-    // Nếu dòng có 1 X và 1 Y -> Cặp chuẩn
-    if (lxs.length === 1 && lys.length === 1) {
-      pairedByLine.push({ x: lxs[0], y: lys[0] });
-    } else if (lxs.length > 0 && lxs.length === lys.length) {
-      for(var i=0; i<lxs.length; i++) pairedByLine.push({x: lxs[i], y: lys[i]});
+    var xs = matches.filter(function(v) { return v.cls === 'X'; });
+    var ys = matches.filter(function(v) { return v.cls === 'Y'; });
+
+    // Thu gom vào pool toàn cục để fallback
+    xs.forEach(function(v) { allX.push(v.val); });
+    ys.forEach(function(v) { allY.push(v.val); });
+
+    // Cặp chuẩn: 1 dòng có đúng 1 X và 1 Y
+    if (xs.length === 1 && ys.length === 1) {
+      pairedByLine.push({ x: xs[0].val, y: ys[0].val });
+    }
+    // Nhiều cặp trên 1 dòng (bảng nhiều cột)
+    else if (xs.length > 0 && xs.length === ys.length) {
+      for (var i = 0; i < xs.length; i++) {
+        pairedByLine.push({ x: xs[i].val, y: ys[i].val });
+      }
     }
   });
 
-  if (pairedByLine.length >= 3 && pairedByLine.length >= Math.min(xs.length, ys.length) * 0.5) {
+  /* ── Bước 5: Quyết định kết quả ── */
+  var foundPoints = [];
+
+  if (pairedByLine.length > 0) {
+    // Ưu tiên kết quả ghép theo dòng (chính xác nhất)
     foundPoints = pairedByLine;
-  } else {
-    // Cách 2: Nếu OCR đọc theo cột (bảng), ghép X và Y theo thứ tự
-    var count = Math.min(xs.length, ys.length);
+  } else if (allX.length > 0 && allY.length > 0) {
+    // Fallback: ghép theo thứ tự nếu số X = số Y
+    var count = Math.min(allX.length, allY.length);
     for (var j = 0; j < count; j++) {
-      foundPoints.push({ x: xs[j], y: ys[j] });
+      foundPoints.push({ x: allX[j], y: allY[j] });
     }
   }
 
-  // Loại bỏ các điểm trùng lặp liên tiếp
+  /* ── Bước 6: Loại trùng lặp liên tiếp (tolerance 1m) ── */
   var uniquePoints = [];
   foundPoints.forEach(function(p) {
-    if (uniquePoints.length === 0) {
+    var last = uniquePoints[uniquePoints.length - 1];
+    if (!last || Math.abs(last.x - p.x) > 1 || Math.abs(last.y - p.y) > 1) {
       uniquePoints.push(p);
-    } else {
-      var last = uniquePoints[uniquePoints.length - 1];
-      if (Math.abs(last.x - p.x) > 0.01 || Math.abs(last.y - p.y) > 0.01) {
-        uniquePoints.push(p);
-      }
     }
   });
 
+  /* ── Bước 7: Hiển thị kết quả ── */
   if (uniquePoints.length === 0) {
-    showToast('Không quét được tọa độ hợp lệ. Hãy chụp rõ nét hơn, tránh bị chói sáng!', 'warning', 7000);
+    showToast('Không quét được tọa độ hợp lệ. Hãy chụp rõ nét, tránh bị chói!', 'warning', 7000);
   } else {
-    showToast('Đã nhận diện thành công ' + uniquePoints.length + ' điểm tọa độ!', 'success', 5000);
+    showToast('Đã nhận diện ' + uniquePoints.length + ' điểm tọa độ!', 'success', 5000);
     var list = $('sodo-points-list');
     if (list) list.innerHTML = '';
     _soDoPointCount = 0;
-    uniquePoints.forEach(function(p) {
-      addSoDoPoint(p.x, p.y);
-    });
+    uniquePoints.forEach(function(p) { addSoDoPoint(p.x, p.y); });
     drawSoDo();
   }
 }
+
 
 function drawSoDo() {
   var sel = $('sodo-province');
