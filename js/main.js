@@ -706,44 +706,56 @@ async function onSoDoOcrUpload(e) {
 }
 
 /**
- * Phát hiện số lượng tọa độ kỳ vọng từ cột "Điểm" trong bảng OCR.
- *
- * Logic: Với whitelist chỉ có số, OCR sẽ đọc mỗi hàng như:
- *   "1 2363228.565 520031.694 21.06"
- * Ta tìm các số nguyên nhỏ (1-99) xuất hiện ở đầu mỗi dòng có tọa độ.
- * Max unique index = tổng số điểm (hàng cuối lặp lại điểm 1 đóng vòng).
+ * Phát hiện số lượng tọa độ kỳ vọng từ cột "Điểm" trong bảng OCR,
+ * HOẶC dự đoán dựa trên số lượng dòng chứa tọa độ (nếu cột Điểm bị cắt mất).
  */
 function detectExpectedRowCount(text) {
   var lines = text.split('\n');
   var indices = {};
   var maxIndex = 0;
+  var linesWithCoords = 0;
 
   lines.forEach(function(line) {
     var trimmed = line.trim();
     if (!trimmed) return;
 
-    // Dòng hợp lệ: bắt đầu bằng số nhỏ (1-2 chữ số), tiếp theo là số tọa độ lớn
-    // Ví dụ: "1 2363228.565 ..." hoặc "1 2363228 565 ..."
-    var m = trimmed.match(/^(\d{1,2})\s+(\d{6,10})/);
-    if (!m) return;
+    // Chuẩn hóa nhẹ trước khi kiểm tra
+    var cleanLine = trimmed.replace(/[oO]/g, '0').replace(/[lI|]/g, '1')
+                           .replace(/(\d),(\d)/g, '$1.$2')
+                           .replace(/(\d)\s*\.\s*(\d)/g, '$1.$2');
 
-    var idx = parseInt(m[1]);
-    var coord = parseInt(m[2]);
-
-    // Đảm bảo con số sau là tọa độ thực (X ≥ 100000 hoặc Y ≥ 100000)
-    if (idx >= 1 && idx <= 50 && coord >= 100000) {
-      indices[idx] = true;
-      if (idx > maxIndex) maxIndex = idx;
+    // Cố gắng tìm cột "Điểm" (số nhỏ đứng đầu, theo sau là tọa độ)
+    var m = cleanLine.match(/^(\d{1,2})\s+(\d{6,10})/);
+    if (m) {
+      var idx = parseInt(m[1]);
+      var coord = parseInt(m[2]);
+      if (idx >= 1 && idx <= 50 && coord >= 100000) {
+        indices[idx] = true;
+        if (idx > maxIndex) maxIndex = idx;
+      }
     }
+
+    // Đếm xem dòng này có chứa số nào dài từ 6-10 chữ số (đặc trưng của X, Y) không
+    var hasNum = false;
+    var words = cleanLine.split(/\s+/);
+    for (var i = 0; i < words.length; i++) {
+      var w = words[i].replace(/[^0-9]/g, '');
+      if (w.length >= 6 && w.length <= 11) {
+        hasNum = true; break;
+      }
+    }
+    if (hasNum) linesWithCoords++;
   });
 
-  // Phải có ít nhất 3 điểm liên tiếp để xác nhận là bảng thực
+  // Ưu tiên 1: Dựa vào cột Điểm (nếu có đủ rõ ràng)
   var uniqueCount = Object.keys(indices).length;
-  if (uniqueCount < 2 || maxIndex < 2) return 0;
+  if (uniqueCount >= 2 && maxIndex >= 2) {
+    return maxIndex;
+  }
 
-  // Nếu unique values khá liên tục (ví dụ 1,2,3,4,5 → maxIndex=5)
-  // nhưng không nhất thiết phải đủ (ảnh chụp thiếu hàng đầu...)
-  return maxIndex;
+  // Ưu tiên 2: Nếu bị mất cột Điểm, dùng số lượng dòng chứa tọa độ làm mốc kỳ vọng.
+  // Nếu quét ra thiếu điểm so với mốc này, nó sẽ tự động chạy chiến lược fallback.
+  return linesWithCoords > 0 ? linesWithCoords : 0;
 }
 
 /* Tách logic trích xuất điểm khỏi render để dùng cho multi-pass */
