@@ -5,7 +5,7 @@
  *   GROQ_API_KEY hoặc OPENROUTER_API_KEY → API Key của provider (Groq/OpenRouter/...)
  */
 
-// Danh sách model reasoning cần thêm reasoning_effort và max_tokens lớn
+// reasoning_effort: 'none' = bỏ block <think>, giảm ~70% token, tránh vượt TPM Groq
 const REASONING_MODELS = ['qwen/qwen3', 'qwen3', 'deepseek-r1', 'deepseek/deepseek-r1'];
 function parseVN2000Number(val) {
   if (typeof val === 'number') return val;
@@ -247,12 +247,12 @@ QUY TẮC:
           }
         ],
         temperature: 0,
-        max_tokens: 8192
+        max_tokens: 2048
       };
 
-      // Thêm reasoning_effort cho Groq reasoning models
+      // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% tokens/request, tránh vượt TPM
       if (REASONING_MODELS.some(m => selectedModel.toLowerCase().includes(m.toLowerCase()))) {
-        payload.reasoning_effort = 'default';
+        payload.reasoning_effort = 'none';
       }
 
       const headers = { 
