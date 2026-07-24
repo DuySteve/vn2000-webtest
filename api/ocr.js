@@ -81,7 +81,7 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
 
     if (apiUrl.includes('openrouter.ai')) {
       headers['HTTP-Referer'] = 'https://vn2000-webtest.vercel.app';
-      headers['X-Title'] = 'VN2000 Sổ Đỏ OCR';
+      headers['X-Title'] = 'VN2000 So Do OCR';
     }
 
     const aiRes = await fetch(apiUrl, {
