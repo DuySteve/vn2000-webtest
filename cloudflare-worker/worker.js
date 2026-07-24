@@ -240,7 +240,7 @@ export default {
           }
         ],
         temperature: 0,
-        max_tokens: 512
+        max_tokens: 256
       };
 
       // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% tokens/request, tránh vượt TPM

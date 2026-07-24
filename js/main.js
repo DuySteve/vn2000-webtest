@@ -167,7 +167,7 @@ function preprocessImageForOCR(file) {
         URL.revokeObjectURL(url);
         var canvas = document.createElement('canvas');
         var ctx = canvas.getContext('2d');
-        var maxDim = 800; // Tối ưu token: 800px đủ đọc bảng in, tiết kiệm ~40% so với 1024px
+        var maxDim = 512; // 512px đủ đọc bảng in, giảm tối đa base64 tokens
         var scale = 1.0;
         if (img.width > maxDim || img.height > maxDim) {
           scale = maxDim / Math.max(img.width, img.height);
@@ -175,7 +175,17 @@ function preprocessImageForOCR(file) {
         canvas.width = Math.floor(img.width * scale);
         canvas.height = Math.floor(img.height * scale);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve({ primary: canvas.toDataURL('image/jpeg', 0.6) }); // quality 0.75 -> 0.6
+        // Chuyển grayscale + tăng contrast: bảng tọa độ chỉ cần đen trắng
+        var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var d = imgData.data;
+        for (var i = 0; i < d.length; i += 4) {
+          var gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+          // Tăng contrast: kéo giãn range
+          gray = Math.min(255, Math.max(0, (gray - 80) * 1.8));
+          d[i] = d[i+1] = d[i+2] = gray;
+        }
+        ctx.putImageData(imgData, 0, 0);
+        resolve({ primary: canvas.toDataURL('image/jpeg', 0.3) }); // grayscale + q0.3 = ~15-20KB
       } catch(e) { reject(e); }
     };
     img.onerror = reject;
