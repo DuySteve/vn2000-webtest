@@ -1,0 +1,6 @@
+name = "vn2000-webtest"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[observability]
+enabled = true
