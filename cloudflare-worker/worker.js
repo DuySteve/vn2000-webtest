@@ -1,11 +1,12 @@
 /**
- * Cloudflare Worker – VN2000 OCR via Groq API (Llama 4 Scout)
+ * Cloudflare Worker – VN2000 OCR
  *
  * Env secrets cần cấu hình trên Cloudflare Dashboard:
- *   GROQ_API_KEY  → API Key lấy từ https://console.groq.com
+ *   GROQ_API_KEY  → API Key của provider (Groq/OpenRouter/...)
  */
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+// Nếu bạn dùng provider khác (như OpenRouter) cho Qwen, hãy đổi URL tương ứng
+const API_URL = 'https://api.groq.com/openai/v1/chat/completions'; 
 
 export default {
   async fetch(request, env, ctx) {
@@ -31,16 +32,16 @@ export default {
       if (!imageBase64) throw new Error('Thiếu trường imageBase64 trong request body');
 
       // 2. Lấy API Key
-      const apiKey = env.GROQ_API_KEY;
-      if (!apiKey) throw new Error('GROQ_API_KEY chưa được cấu hình trên Cloudflare');
+      const apiKey = env.GROQ_API_KEY; 
+      if (!apiKey) throw new Error('API_KEY chưa được cấu hình trên Cloudflare');
 
-      // 3. Chuẩn bị payload cho Groq OpenAI-compatible API
+      // 3. Chuẩn bị payload cho OpenAI-compatible API
       const imageUrl = imageBase64.startsWith('data:image') 
         ? imageBase64 
         : `data:image/png;base64,${imageBase64}`;
 
       const payload = {
-        model: "llama-3.2-11b-vision-preview", // 11B Vision: Bản chuẩn mở miễn phí (Llama 4 Scout đang bị Groq khóa 403)
+        model: "qwen/qwen3.6-27b", 
         messages: [
           {
             role: "user",
@@ -71,8 +72,8 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
         max_tokens: 2048
       };
 
-      // 4. Gọi Groq API
-      const aiRes = await fetch(GROQ_API_URL, {
+      // 4. Gọi API
+      const aiRes = await fetch(API_URL, {
         method:  'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -83,13 +84,13 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
 
       if (!aiRes.ok) {
         const errBody = await aiRes.text();
-        throw new Error(`Groq API HTTP ${aiRes.status}: ${errBody}`);
+        throw new Error(`API HTTP ${aiRes.status}: ${errBody}`);
       }
 
       const data = await aiRes.json();
 
       if (data.error) {
-        throw new Error(`Groq API error: ${data.error.message}`);
+        throw new Error(`API error: ${data.error.message}`);
       }
 
       // 5. Parse kết quả
@@ -132,4 +133,3 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
     }
   },
 };
-
