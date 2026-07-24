@@ -223,12 +223,12 @@ export default {
         model: selectedModel, 
         messages: [
           {
+            role: "system",
+            content: "Output X Y per line. No text."
+          },
+          {
             role: "user",
             content: [
-              {
-                type: "text",
-                text: "Đọc tọa độ X,Y từ bảng trong ảnh."
-              },
               {
                 type: "image_url",
                 image_url: {
@@ -240,7 +240,7 @@ export default {
           }
         ],
         temperature: 0,
-        max_tokens: 1024
+        max_tokens: 512
       };
 
       // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% tokens/request, tránh vượt TPM
