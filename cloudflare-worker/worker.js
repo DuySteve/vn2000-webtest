@@ -5,42 +5,41 @@
  *   GROQ_API_KEY hoặc OPENROUTER_API_KEY → API Key của provider (Groq/OpenRouter/...)
  */
 
-function parseNum(val) {
+function parseVN2000Number(val) {
   if (typeof val === 'number') return val;
-  if (typeof val === 'string') {
-    let str = val.trim();
-    if (str.includes('.') && str.includes(',')) {
-      if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
-        str = str.replace(/\./g, '').replace(',', '.');
-      } else {
-        str = str.replace(/,/g, '');
-      }
-    } else if (str.includes(',')) {
-      if (str.indexOf(',') === str.lastIndexOf(',') && str.length - str.indexOf(',') <= 4) {
-        str = str.replace(',', '.');
-      } else {
-        str = str.replace(/,/g, '');
-      }
-    }
-    const num = parseFloat(str);
-    return isNaN(num) ? null : num;
+  if (!val || typeof val !== 'string') return null;
+
+  let str = val.trim();
+  
+  if ((str.match(/\./g) || []).length > 1) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  } else if ((str.match(/,/g) || []).length > 1) {
+    str = str.replace(/,/g, '');
+  } else if (str.includes(',')) {
+    str = str.replace(',', '.');
   }
-  return null;
+
+  const num = parseFloat(str);
+  return isNaN(num) ? null : num;
 }
 
 function sanitizeItem(item) {
   if (!item) return null;
 
-  // Nếu item là Array: [2380968.497, 524713.053]
+  // Nếu item là Array: [2363228.565, 520031.694] hoặc ["2363228.565", "520031.694"]
   if (Array.isArray(item)) {
-    const num1 = parseNum(item[0]);
-    const num2 = parseNum(item[1]);
-    if (num1 !== null && num2 !== null) {
-      if (num1 > num2) {
-        return { x: num1, y: num2 };
-      } else {
-        return { x: num2, y: num1 };
+    const nums = item.map(parseVN2000Number).filter(v => v !== null);
+    let xVal = null;
+    let yVal = null;
+    for (let n of nums) {
+      if (n >= 500000 && n <= 3500000 && xVal === null) {
+        xVal = n;
+      } else if (n >= 100000 && n <= 900000 && yVal === null) {
+        yVal = n;
       }
+    }
+    if (xVal !== null && yVal !== null) {
+      return { x: xVal, y: yVal };
     }
     return null;
   }
@@ -52,20 +51,20 @@ function sanitizeItem(item) {
 
     for (let key in item) {
       const k = key.toLowerCase().trim();
-      const val = parseNum(item[key]);
+      const val = parseVN2000Number(item[key]);
       if (val === null) continue;
 
-      if (k === 'x' || k === 'x_m' || k === 'x (m)' || k === 'northing' || k === 'x_coord') {
+      if (k === 'x' || k === 'x_m' || k === 'x (m)' || k === 'northing' || k === 'x_coord' || k === 'x(m)') {
         xVal = val;
-      } else if (k === 'y' || k === 'y_m' || k === 'y (m)' || k === 'easting' || k === 'y_coord') {
+      } else if (k === 'y' || k === 'y_m' || k === 'y (m)' || k === 'easting' || k === 'y_coord' || k === 'y(m)') {
         yVal = val;
       }
     }
 
     if (xVal === null || yVal === null) {
-      const vals = Object.values(item).map(parseNum).filter(v => v !== null);
+      const vals = Object.values(item).map(parseVN2000Number).filter(v => v !== null);
       for (let v of vals) {
-        if (v >= 800000 && v <= 3000000 && xVal === null) {
+        if (v >= 500000 && v <= 3500000 && xVal === null) {
           xVal = v;
         } else if (v >= 100000 && v <= 900000 && yVal === null) {
           yVal = v;
@@ -102,7 +101,7 @@ function parseCoordinatesFromAIText(aiText) {
     .replace(/<think>[\s\S]*/gi, '')
     .trim();
 
-  // 2. Thử các ứng viên JSON
+  // 2. Thử parse các khối JSON
   let jsonCandidates = [];
   
   const matchArray = cleanText.match(/\[\s*[\s\S]*\s*\]/);
@@ -128,11 +127,11 @@ function parseCoordinatesFromAIText(aiText) {
       }
     } catch (e) {}
 
-    // Sửa các lỗi cú pháp JSON phổ biến
-    let sanitizedStr = rawStr.replace(/(["']?[xyXY]["']?\s*:\s*\d+),(\d+)/gi, '$1.$2');
-    sanitizedStr = sanitizedStr.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
-    sanitizedStr = sanitizedStr.replace(/'/g, '"');
-    sanitizedStr = sanitizedStr.replace(/,\s*([}\]])/g, '$1');
+    // Sửa các lỗi cú pháp JSON thông thường
+    let sanitizedStr = rawStr
+      .replace(/([{,]\s*)([a-zA-Z0-9_\s\(\)]+)\s*:/g, '$1"$2":')
+      .replace(/'/g, '"')
+      .replace(/,\s*([}\]])/g, '$1');
 
     try {
       const parsed = JSON.parse(sanitizedStr);
@@ -144,12 +143,12 @@ function parseCoordinatesFromAIText(aiText) {
     } catch (e) {}
   }
 
-  // 3. Fallback: Quét Regex theo dòng (đọc được cả bảng Markdown / Văn bản thuần)
+  // 3. Fallback: Quét Regex theo dòng (đọc trực tiếp mọi định dạng Bảng / Text)
   const lines = cleanText.split('\n');
   const extracted = [];
 
   for (let line of lines) {
-    let norm = line.replace(/(\d+)\.(\d{3})/g, '$1$2').replace(/(\d+),(\d+)/g, '$1.$2');
+    let norm = line.replace(/(\d+),(\d+)/g, '$1.$2');
     const matches = norm.match(/\d+(?:\.\d+)?/g);
     if (!matches || matches.length < 2) continue;
 
@@ -158,7 +157,7 @@ function parseCoordinatesFromAIText(aiText) {
     let foundY = null;
 
     for (let n of nums) {
-      if (n >= 800000 && n <= 3000000 && foundX === null) {
+      if (n >= 500000 && n <= 3500000 && foundX === null) {
         foundX = n;
       } else if (n >= 100000 && n <= 900000 && foundY === null) {
         foundY = n;
@@ -229,12 +228,12 @@ export default {
                 text: `Bạn là chuyên gia trắc địa Việt Nam. Hãy trích xuất TẤT CẢ các cặp tọa độ VN2000 (X, Y) từ bảng tọa độ trong hình ảnh này.
 
 QUY TẮC:
-- Tọa độ X (Northing) thường từ 800,000 đến 3,000,000
+- Tọa độ X (Northing) thường từ 500,000 đến 3,000,000
 - Tọa độ Y (Easting) thường từ 100,000 đến 900,000
-- BẮT BUỘC dùng dấu chấm (.) cho số thập phân (Ví dụ: 2380968.497, KHÔNG dùng 2380968,497)
+- Dữ liệu dạng X(m), Y(m) hoặc X, Y. Giữ nguyên dấu chấm thập phân (.) nếu có trong ảnh
 - Mỗi dòng bảng = 1 cặp tọa độ, đọc ĐỦ TẤT CẢ các dòng, không bỏ sót
 - CHỈ trả về duy nhất 1 JSON array thuần túy, không dùng markdown, không có giải thích hay suy nghĩ:
-[{"x": 2380968.497, "y": 524713.053}]`
+[{"x": 2363228.565, "y": 520031.694}]`
               },
               {
                 type: "image_url",
