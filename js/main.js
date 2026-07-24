@@ -167,7 +167,7 @@ function preprocessImageForOCR(file) {
         URL.revokeObjectURL(url);
         var canvas = document.createElement('canvas');
         var ctx = canvas.getContext('2d');
-        var maxDim = 1600;
+        var maxDim = 1024; // Giảm từ 1600 xuống 1024 để tránh vượt TPM giới hạn Groq
         var scale = 1.0;
         if (img.width > maxDim || img.height > maxDim) {
           scale = maxDim / Math.max(img.width, img.height);
@@ -175,7 +175,7 @@ function preprocessImageForOCR(file) {
         canvas.width = Math.floor(img.width * scale);
         canvas.height = Math.floor(img.height * scale);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve({ primary: canvas.toDataURL('image/jpeg', 0.85) });
+        resolve({ primary: canvas.toDataURL('image/jpeg', 0.75) }); // quality 0.85 -> 0.75
       } catch(e) { reject(e); }
     };
     img.onerror = reject;
