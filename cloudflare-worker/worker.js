@@ -5,20 +5,111 @@
  *   GROQ_API_KEY hoặc OPENROUTER_API_KEY → API Key của provider (Groq/OpenRouter/...)
  */
 
+function parseNum(val) {
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    let str = val.trim();
+    if (str.includes('.') && str.includes(',')) {
+      if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
+        str = str.replace(/\./g, '').replace(',', '.');
+      } else {
+        str = str.replace(/,/g, '');
+      }
+    } else if (str.includes(',')) {
+      if (str.indexOf(',') === str.lastIndexOf(',') && str.length - str.indexOf(',') <= 4) {
+        str = str.replace(',', '.');
+      } else {
+        str = str.replace(/,/g, '');
+      }
+    }
+    const num = parseFloat(str);
+    return isNaN(num) ? null : num;
+  }
+  return null;
+}
+
+function sanitizeItem(item) {
+  if (!item) return null;
+
+  // Nếu item là Array: [2380968.497, 524713.053]
+  if (Array.isArray(item)) {
+    const num1 = parseNum(item[0]);
+    const num2 = parseNum(item[1]);
+    if (num1 !== null && num2 !== null) {
+      if (num1 > num2) {
+        return { x: num1, y: num2 };
+      } else {
+        return { x: num2, y: num1 };
+      }
+    }
+    return null;
+  }
+
+  // Nếu item là Object
+  if (typeof item === 'object') {
+    let xVal = null;
+    let yVal = null;
+
+    for (let key in item) {
+      const k = key.toLowerCase().trim();
+      const val = parseNum(item[key]);
+      if (val === null) continue;
+
+      if (k === 'x' || k === 'x_m' || k === 'x (m)' || k === 'northing' || k === 'x_coord') {
+        xVal = val;
+      } else if (k === 'y' || k === 'y_m' || k === 'y (m)' || k === 'easting' || k === 'y_coord') {
+        yVal = val;
+      }
+    }
+
+    if (xVal === null || yVal === null) {
+      const vals = Object.values(item).map(parseNum).filter(v => v !== null);
+      for (let v of vals) {
+        if (v >= 800000 && v <= 3000000 && xVal === null) {
+          xVal = v;
+        } else if (v >= 100000 && v <= 900000 && yVal === null) {
+          yVal = v;
+        }
+      }
+    }
+
+    if (xVal !== null && yVal !== null && xVal > 0 && yVal > 0) {
+      return { x: xVal, y: yVal };
+    }
+  }
+
+  return null;
+}
+
+function extractArrayFromParsedJson(parsed) {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === 'object') {
+    for (let key in parsed) {
+      if (Array.isArray(parsed[key])) {
+        return parsed[key];
+      }
+    }
+  }
+  return null;
+}
+
 function parseCoordinatesFromAIText(aiText) {
   if (!aiText) return [];
 
-  // 1. Loại bỏ các khối suy nghĩ <think>...</think> của model reasoning (Qwen 3.6 / DeepSeek)
+  // 1. Loại bỏ các khối suy nghĩ <think>...</think> của model reasoning
   let cleanText = aiText
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .replace(/<think>[\s\S]*/gi, '')
     .trim();
 
-  // 2. Thử parse JSON
+  // 2. Thử các ứng viên JSON
   let jsonCandidates = [];
   
-  const matchArray = cleanText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  const matchArray = cleanText.match(/\[\s*[\s\S]*\s*\]/);
   if (matchArray) jsonCandidates.push(matchArray[0]);
+
+  const matchObject = cleanText.match(/\{\s*[\s\S]*\s*\}/);
+  if (matchObject) jsonCandidates.push(matchObject[0]);
 
   const matchCode = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (matchCode) jsonCandidates.push(matchCode[1].trim());
@@ -28,48 +119,45 @@ function parseCoordinatesFromAIText(aiText) {
   for (let rawStr of jsonCandidates) {
     if (!rawStr) continue;
 
-    // Direct JSON parse
     try {
       const parsed = JSON.parse(rawStr);
-      if (Array.isArray(parsed)) {
-        const result = sanitizeCoordinates(parsed);
+      const arr = extractArrayFromParsedJson(parsed);
+      if (arr) {
+        const result = arr.map(sanitizeItem).filter(Boolean);
         if (result.length > 0) return result;
       }
     } catch (e) {}
 
-    // Sửa các lỗi cú pháp JSON thường gặp từ LLM:
-    // a) Sửa số thập phân dùng dấu phẩy dạng "x": 2380968,497 -> "x": 2380968.497
+    // Sửa các lỗi cú pháp JSON phổ biến
     let sanitizedStr = rawStr.replace(/(["']?[xyXY]["']?\s*:\s*\d+),(\d+)/gi, '$1.$2');
-    // b) Sửa unquoted keys: { x: ... } -> { "x": ... }
     sanitizedStr = sanitizedStr.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
-    // c) Sửa nháy đơn thành nháy kép
     sanitizedStr = sanitizedStr.replace(/'/g, '"');
-    // d) Xóa phẩy thừa ở cuối object/array
     sanitizedStr = sanitizedStr.replace(/,\s*([}\]])/g, '$1');
 
     try {
       const parsed = JSON.parse(sanitizedStr);
-      if (Array.isArray(parsed)) {
-        const result = sanitizeCoordinates(parsed);
+      const arr = extractArrayFromParsedJson(parsed);
+      if (arr) {
+        const result = arr.map(sanitizeItem).filter(Boolean);
         if (result.length > 0) return result;
       }
     } catch (e) {}
   }
 
-  // 3. Fallback: Quét từng dòng bằng Regex (Dành cho trường hợp AI trả về bảng Markdown hoặc Text thuần)
+  // 3. Fallback: Quét Regex theo dòng (đọc được cả bảng Markdown / Văn bản thuần)
   const lines = cleanText.split('\n');
   const extracted = [];
 
   for (let line of lines) {
-    const normalizedLine = line.replace(/(\d+),(\d+)/g, '$1.$2');
-    const nums = normalizedLine.match(/\d+(?:\.\d+)?/g);
-    if (!nums || nums.length < 2) continue;
+    let norm = line.replace(/(\d+)\.(\d{3})/g, '$1$2').replace(/(\d+),(\d+)/g, '$1.$2');
+    const matches = norm.match(/\d+(?:\.\d+)?/g);
+    if (!matches || matches.length < 2) continue;
 
-    const parsedNums = nums.map(n => parseFloat(n));
+    const nums = matches.map(n => parseFloat(n)).filter(n => !isNaN(n));
     let foundX = null;
     let foundY = null;
 
-    for (let n of parsedNums) {
+    for (let n of nums) {
       if (n >= 800000 && n <= 3000000 && foundX === null) {
         foundX = n;
       } else if (n >= 100000 && n <= 900000 && foundY === null) {
@@ -83,26 +171,6 @@ function parseCoordinatesFromAIText(aiText) {
   }
 
   return extracted;
-}
-
-function sanitizeCoordinates(arr) {
-  if (!Array.isArray(arr)) return [];
-  return arr.map(item => {
-    if (!item || typeof item !== 'object') return null;
-    let xRaw = item.x !== undefined ? item.x : (item.X !== undefined ? item.X : item.northing);
-    let yRaw = item.y !== undefined ? item.y : (item.Y !== undefined ? item.Y : item.easting);
-
-    if (typeof xRaw === 'string') xRaw = parseFloat(xRaw.replace(',', '.'));
-    if (typeof yRaw === 'string') yRaw = parseFloat(yRaw.replace(',', '.'));
-
-    const x = Number(xRaw);
-    const y = Number(yRaw);
-
-    if (!isNaN(x) && !isNaN(y) && x > 0 && y > 0) {
-      return { x, y };
-    }
-    return null;
-  }).filter(Boolean);
 }
 
 export default {
