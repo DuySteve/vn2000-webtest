@@ -2,11 +2,8 @@
  * Cloudflare Worker – VN2000 OCR
  *
  * Env secrets cần cấu hình trên Cloudflare Dashboard:
- *   GROQ_API_KEY  → API Key của provider (Groq/OpenRouter/...)
+ *   GROQ_API_KEY hoặc OPENROUTER_API_KEY → API Key của provider (Groq/OpenRouter/...)
  */
-
-// Nếu bạn dùng provider khác (như OpenRouter) cho Qwen, hãy đổi URL tương ứng
-const API_URL = 'https://api.groq.com/openai/v1/chat/completions'; 
 
 export default {
   async fetch(request, env, ctx) {
@@ -33,16 +30,25 @@ export default {
       if (!imageBase64) throw new Error('Thiếu trường imageBase64 trong request body');
 
       // 2. Lấy API Key
-      const apiKey = env.GROQ_API_KEY || env.OPENROUTER_API_KEY; 
-      if (!apiKey) throw new Error('API_KEY chưa được cấu hình trên Cloudflare (GROQ_API_KEY hoặc OPENROUTER_API_KEY)');
+      const rawKey = env.OPENROUTER_API_KEY || env.GROQ_API_KEY; 
+      if (!rawKey) throw new Error('API_KEY chưa được cấu hình trên Cloudflare (GROQ_API_KEY hoặc OPENROUTER_API_KEY)');
+      const apiKey = rawKey.trim();
 
-      const model = clientModel || "qwen/qwen3.6-27b";
+      const reqModel = clientModel || "qwen/qwen3.6-27b";
+      let apiUrl = env.AI_API_URL;
+      let selectedModel = reqModel;
 
-      const apiUrl = env.AI_API_URL || (
-        (model.includes('/') || env.OPENROUTER_API_KEY)
-          ? 'https://openrouter.ai/api/v1/chat/completions'
-          : API_URL
-      );
+      if (!apiUrl) {
+        if (apiKey.startsWith('sk-or-') || env.OPENROUTER_API_KEY) {
+          apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+          selectedModel = reqModel;
+        } else {
+          apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+          if (reqModel.includes('/')) {
+            selectedModel = 'llama-3.2-90b-vision-preview';
+          }
+        }
+      }
 
       // 3. Chuẩn bị payload cho OpenAI-compatible API
       const imageUrl = imageBase64.startsWith('data:image') 
@@ -50,7 +56,7 @@ export default {
         : `data:image/png;base64,${imageBase64}`;
 
       const payload = {
-        model: model, 
+        model: selectedModel, 
         messages: [
           {
             role: "user",

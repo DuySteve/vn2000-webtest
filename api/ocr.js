@@ -1,9 +1,7 @@
 export const config = {
   runtime: 'nodejs', // Bắt buộc dùng Node.js thay vì Edge
-  regions: ['iad1'], // BẮT BUỘC ÉP CHẠY Ở MỸ (Washington D.C) để vượt rào Groq chặn IP Việt Nam
+  regions: ['iad1'], // BẮT BUỘC ÉP CHẠY Ở MỸ (Washington D.C) để vượt rào Groq/OpenRouter chặn IP Việt Nam
 };
-
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 export default async function handler(req, res) {
   // CORS Preflight
@@ -25,25 +23,37 @@ export default async function handler(req, res) {
       throw new Error('Thiếu trường imageBase64 trong request');
     }
 
-    const apiKey = process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
+    const rawKey = process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY;
+    if (!rawKey) {
       throw new Error('Chưa cấu hình GROQ_API_KEY hoặc OPENROUTER_API_KEY trên Vercel');
     }
+    const apiKey = rawKey.trim();
 
-    const requestedModel = req.body.model || "qwen/qwen3.6-27b";
+    let clientModel = req.body.model || "qwen/qwen3.6-27b";
+    let apiUrl = process.env.AI_API_URL;
+    let selectedModel = clientModel;
 
-    const apiUrl = process.env.AI_API_URL || (
-      (requestedModel.includes('/') || process.env.OPENROUTER_API_KEY)
-        ? 'https://openrouter.ai/api/v1/chat/completions'
-        : GROQ_API_URL
-    );
+    if (!apiUrl) {
+      // Tự động nhận diện Provider dựa trên API Key
+      if (apiKey.startsWith('sk-or-') || process.env.OPENROUTER_API_KEY) {
+        apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+        selectedModel = clientModel;
+      } else {
+        // Mặc định dùng Groq
+        apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+        // Nếu client yêu cầu model OpenRouter (chứa '/'), fallback sang vision model tương thích của Groq
+        if (clientModel.includes('/')) {
+          selectedModel = 'llama-3.2-90b-vision-preview';
+        }
+      }
+    }
 
     const imageUrl = imageBase64.startsWith('data:image') 
       ? imageBase64 
       : `data:image/png;base64,${imageBase64}`;
 
     const payload = {
-      model: requestedModel,
+      model: selectedModel,
       messages: [
         {
           role: "user",
@@ -97,7 +107,7 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
 
     const data = await aiRes.json();
     if (data.error) {
-      throw new Error(`Groq API error: ${data.error.message}`);
+      throw new Error(`API error: ${data.error.message}`);
     }
 
     const aiText = data.choices?.[0]?.message?.content;
