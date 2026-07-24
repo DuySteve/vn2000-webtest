@@ -3,6 +3,106 @@ export const config = {
   regions: ['iad1'], // BẮT BUỘC ÉP CHẠY Ở MỸ (Washington D.C) để vượt rào Groq chặn IP Việt Nam
 };
 
+function parseCoordinatesFromAIText(aiText) {
+  if (!aiText) return [];
+
+  // 1. Loại bỏ các khối suy nghĩ <think>...</think> của model reasoning (Qwen 3.6 / DeepSeek)
+  let cleanText = aiText
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<think>[\s\S]*/gi, '')
+    .trim();
+
+  // 2. Thử parse JSON
+  let jsonCandidates = [];
+  
+  const matchArray = cleanText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  if (matchArray) jsonCandidates.push(matchArray[0]);
+
+  const matchCode = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (matchCode) jsonCandidates.push(matchCode[1].trim());
+
+  jsonCandidates.push(cleanText);
+
+  for (let rawStr of jsonCandidates) {
+    if (!rawStr) continue;
+
+    // Direct JSON parse
+    try {
+      const parsed = JSON.parse(rawStr);
+      if (Array.isArray(parsed)) {
+        const result = sanitizeCoordinates(parsed);
+        if (result.length > 0) return result;
+      }
+    } catch (e) {}
+
+    // Sửa các lỗi cú pháp JSON thường gặp từ LLM:
+    // a) Sửa số thập phân dùng dấu phẩy dạng "x": 2380968,497 -> "x": 2380968.497
+    let sanitizedStr = rawStr.replace(/(["']?[xyXY]["']?\s*:\s*\d+),(\d+)/gi, '$1.$2');
+    // b) Sửa unquoted keys: { x: ... } -> { "x": ... }
+    sanitizedStr = sanitizedStr.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
+    // c) Sửa nháy đơn thành nháy kép
+    sanitizedStr = sanitizedStr.replace(/'/g, '"');
+    // d) Xóa phẩy thừa ở cuối object/array
+    sanitizedStr = sanitizedStr.replace(/,\s*([}\]])/g, '$1');
+
+    try {
+      const parsed = JSON.parse(sanitizedStr);
+      if (Array.isArray(parsed)) {
+        const result = sanitizeCoordinates(parsed);
+        if (result.length > 0) return result;
+      }
+    } catch (e) {}
+  }
+
+  // 3. Fallback: Quét từng dòng bằng Regex (Dành cho trường hợp AI trả về bảng Markdown hoặc Text thuần)
+  const lines = cleanText.split('\n');
+  const extracted = [];
+
+  for (let line of lines) {
+    const normalizedLine = line.replace(/(\d+),(\d+)/g, '$1.$2');
+    const nums = normalizedLine.match(/\d+(?:\.\d+)?/g);
+    if (!nums || nums.length < 2) continue;
+
+    const parsedNums = nums.map(n => parseFloat(n));
+    let foundX = null;
+    let foundY = null;
+
+    for (let n of parsedNums) {
+      if (n >= 800000 && n <= 3000000 && foundX === null) {
+        foundX = n;
+      } else if (n >= 100000 && n <= 900000 && foundY === null) {
+        foundY = n;
+      }
+    }
+
+    if (foundX !== null && foundY !== null) {
+      extracted.push({ x: foundX, y: foundY });
+    }
+  }
+
+  return extracted;
+}
+
+function sanitizeCoordinates(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.map(item => {
+    if (!item || typeof item !== 'object') return null;
+    let xRaw = item.x !== undefined ? item.x : (item.X !== undefined ? item.X : item.northing);
+    let yRaw = item.y !== undefined ? item.y : (item.Y !== undefined ? item.Y : item.easting);
+
+    if (typeof xRaw === 'string') xRaw = parseFloat(xRaw.replace(',', '.'));
+    if (typeof yRaw === 'string') yRaw = parseFloat(yRaw.replace(',', '.'));
+
+    const x = Number(xRaw);
+    const y = Number(yRaw);
+
+    if (!isNaN(x) && !isNaN(y) && x > 0 && y > 0) {
+      return { x, y };
+    }
+    return null;
+  }).filter(Boolean);
+}
+
 export default async function handler(req, res) {
   // CORS Preflight
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -57,11 +157,10 @@ export default async function handler(req, res) {
 QUY TẮC:
 - Tọa độ X (Northing) thường từ 800,000 đến 3,000,000
 - Tọa độ Y (Easting) thường từ 100,000 đến 900,000
+- BẮT BUỘC dùng dấu chấm (.) cho số thập phân (Ví dụ: 2380968.497, KHÔNG dùng 2380968,497)
 - Mỗi dòng bảng = 1 cặp tọa độ, đọc ĐỦ TẤT CẢ các dòng, không bỏ sót
-- Số thập phân dùng dấu chấm (.)
-
-CHỈ trả về JSON array thuần túy, không có markdown, không có giải thích:
-[{"x": 2363228.12, "y": 520031.45}]`
+- CHỈ trả về duy nhất 1 JSON array thuần túy, không dùng markdown, không có giải thích hay suy nghĩ:
+[{"x": 2380968.497, "y": 524713.053}]`
             },
             {
               type: "image_url",
@@ -105,37 +204,7 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
     const aiText = data.choices?.[0]?.message?.content;
     if (!aiText) throw new Error('AI không trả về kết quả.');
 
-    // 1. Loại bỏ các khối suy nghĩ <think>...</think> của model reasoning (Qwen 3.6 / DeepSeek)
-    let cleanText = aiText.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*/gi, '').trim();
-
-    // 2. Tìm đoạn JSON array [...] trong response text
-    let jsonStr = '';
-    const jsonMatch = cleanText.match(/\[\s*\{[\s\S]*\}\s*\]/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[0];
-    } else {
-      jsonStr = cleanText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    }
-
-    // 3. Parse JSON và chuẩn hóa tọa độ
-    let rawCoords = [];
-    try {
-      rawCoords = JSON.parse(jsonStr);
-    } catch (e) {
-      // Thử sửa lỗi dấu phẩy ở số thập phân
-      const fixedJson = jsonStr.replace(/(\d+),(\d+)/g, '$1.$2');
-      rawCoords = JSON.parse(fixedJson);
-    }
-
-    if (!Array.isArray(rawCoords)) {
-      throw new Error('Kết quả không phải dạng danh sách tọa độ hợp lệ.');
-    }
-
-    const coordinates = rawCoords.map(item => {
-      let x = typeof item.x === 'string' ? parseFloat(item.x.replace(',', '.')) : parseFloat(item.x);
-      let y = typeof item.y === 'string' ? parseFloat(item.y.replace(',', '.')) : parseFloat(item.y);
-      return { x, y };
-    }).filter(p => !isNaN(p.x) && !isNaN(p.y));
+    const coordinates = parseCoordinatesFromAIText(aiText);
 
     if (coordinates.length === 0) {
       throw new Error('Không tìm thấy tọa độ nào trong ảnh.');
