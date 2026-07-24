@@ -105,10 +105,39 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
     const aiText = data.choices?.[0]?.message?.content;
     if (!aiText) throw new Error('AI không trả về kết quả.');
 
-    const jsonStr = aiText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    const coordinates = JSON.parse(jsonStr);
+    // 1. Loại bỏ các khối suy nghĩ <think>...</think> của model reasoning (Qwen 3.6 / DeepSeek)
+    let cleanText = aiText.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*/gi, '').trim();
 
-    if (!Array.isArray(coordinates) || coordinates.length === 0) {
+    // 2. Tìm đoạn JSON array [...] trong response text
+    let jsonStr = '';
+    const jsonMatch = cleanText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[0];
+    } else {
+      jsonStr = cleanText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    }
+
+    // 3. Parse JSON và chuẩn hóa tọa độ
+    let rawCoords = [];
+    try {
+      rawCoords = JSON.parse(jsonStr);
+    } catch (e) {
+      // Thử sửa lỗi dấu phẩy ở số thập phân
+      const fixedJson = jsonStr.replace(/(\d+),(\d+)/g, '$1.$2');
+      rawCoords = JSON.parse(fixedJson);
+    }
+
+    if (!Array.isArray(rawCoords)) {
+      throw new Error('Kết quả không phải dạng danh sách tọa độ hợp lệ.');
+    }
+
+    const coordinates = rawCoords.map(item => {
+      let x = typeof item.x === 'string' ? parseFloat(item.x.replace(',', '.')) : parseFloat(item.x);
+      let y = typeof item.y === 'string' ? parseFloat(item.y.replace(',', '.')) : parseFloat(item.y);
+      return { x, y };
+    }).filter(p => !isNaN(p.x) && !isNaN(p.y));
+
+    if (coordinates.length === 0) {
       throw new Error('Không tìm thấy tọa độ nào trong ảnh.');
     }
 
