@@ -30,23 +30,18 @@ export default {
       if (!imageBase64) throw new Error('Thiếu trường imageBase64 trong request body');
 
       // 2. Lấy API Key
-      const rawKey = env.OPENROUTER_API_KEY || env.GROQ_API_KEY; 
+      const rawKey = env.GROQ_API_KEY || env.OPENROUTER_API_KEY; 
       if (!rawKey) throw new Error('API_KEY chưa được cấu hình trên Cloudflare (GROQ_API_KEY hoặc OPENROUTER_API_KEY)');
       const apiKey = rawKey.trim();
 
-      const reqModel = clientModel || "qwen/qwen3.6-27b";
+      const selectedModel = clientModel || "qwen/qwen3.6-27b";
       let apiUrl = env.AI_API_URL;
-      let selectedModel = reqModel;
 
       if (!apiUrl) {
-        if (apiKey.startsWith('gsk_')) {
-          apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-          if (reqModel.includes('/')) {
-            selectedModel = 'llama-3.2-11b-vision-instruct';
-          }
-        } else {
+        if (apiKey.startsWith('sk-or-') || env.OPENROUTER_API_KEY) {
           apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
-          selectedModel = reqModel;
+        } else {
+          apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
         }
       }
 

@@ -1,6 +1,6 @@
 export const config = {
   runtime: 'nodejs', // Bắt buộc dùng Node.js thay vì Edge
-  regions: ['iad1'], // BẮT BUỘC ÉP CHẠY Ở MỸ (Washington D.C) để vượt rào Groq/OpenRouter chặn IP Việt Nam
+  regions: ['iad1'], // BẮT BUỘC ÉP CHẠY Ở MỸ (Washington D.C) để vượt rào Groq chặn IP Việt Nam
 };
 
 export default async function handler(req, res) {
@@ -23,27 +23,20 @@ export default async function handler(req, res) {
       throw new Error('Thiếu trường imageBase64 trong request');
     }
 
-    const rawKey = process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY;
+    const rawKey = process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY;
     if (!rawKey) {
-      throw new Error('Chưa cấu hình GROQ_API_KEY hoặc OPENROUTER_API_KEY trên Vercel');
+      throw new Error('Chưa cấu hình GROQ_API_KEY trên Vercel');
     }
     const apiKey = rawKey.trim();
 
-    let clientModel = req.body.model || "qwen/qwen3.6-27b";
+    const selectedModel = req.body.model || "qwen/qwen3.6-27b";
+    
     let apiUrl = process.env.AI_API_URL;
-    let selectedModel = clientModel;
-
     if (!apiUrl) {
-      if (apiKey.startsWith('gsk_')) {
-        // Khóa của Groq API
-        apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-        if (clientModel.includes('/')) {
-          selectedModel = 'llama-3.2-11b-vision-instruct';
-        }
-      } else {
-        // Mặc định dùng OpenRouter cho Qwen và các model vendor/model
+      if (apiKey.startsWith('sk-or-') || process.env.OPENROUTER_API_KEY) {
         apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
-        selectedModel = clientModel;
+      } else {
+        apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
       }
     }
 
@@ -101,12 +94,12 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
 
     if (!aiRes.ok) {
       const errText = await aiRes.text();
-      throw new Error(`API HTTP ${aiRes.status}: ${errText}`);
+      throw new Error(`Groq API HTTP ${aiRes.status}: ${errText}`);
     }
 
     const data = await aiRes.json();
     if (data.error) {
-      throw new Error(`API error: ${data.error.message}`);
+      throw new Error(`Groq API error: ${data.error.message}`);
     }
 
     const aiText = data.choices?.[0]?.message?.content;
