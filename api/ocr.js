@@ -25,17 +25,25 @@ export default async function handler(req, res) {
       throw new Error('Thiếu trường imageBase64 trong request');
     }
 
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      throw new Error('Chưa cấu hình GROQ_API_KEY trên Vercel');
+      throw new Error('Chưa cấu hình GROQ_API_KEY hoặc OPENROUTER_API_KEY trên Vercel');
     }
+
+    const requestedModel = req.body.model || "qwen/qwen3.6-27b";
+
+    const apiUrl = process.env.AI_API_URL || (
+      (requestedModel.includes('/') || process.env.OPENROUTER_API_KEY)
+        ? 'https://openrouter.ai/api/v1/chat/completions'
+        : GROQ_API_URL
+    );
 
     const imageUrl = imageBase64.startsWith('data:image') 
       ? imageBase64 
       : `data:image/png;base64,${imageBase64}`;
 
     const payload = {
-      model: req.body.model || "llama-3.2-90b-vision-preview",
+      model: requestedModel,
       messages: [
         {
           role: "user",
@@ -66,18 +74,25 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
       max_tokens: 2048
     };
 
-    const aiRes = await fetch(GROQ_API_URL, {
+    const headers = { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    };
+
+    if (apiUrl.includes('openrouter.ai')) {
+      headers['HTTP-Referer'] = 'https://vn2000-webtest.vercel.app';
+      headers['X-Title'] = 'VN2000 Sổ Đỏ OCR';
+    }
+
+    const aiRes = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: headers,
       body: JSON.stringify(payload),
     });
 
     if (!aiRes.ok) {
       const errText = await aiRes.text();
-      throw new Error(`Groq API HTTP ${aiRes.status}: ${errText}`);
+      throw new Error(`API HTTP ${aiRes.status}: ${errText}`);
     }
 
     const data = await aiRes.json();

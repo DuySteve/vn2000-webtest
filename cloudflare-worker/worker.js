@@ -28,12 +28,21 @@ export default {
 
     try {
       // 1. Đọc ảnh từ request
-      const { imageBase64 } = await request.json();
+      const reqJson = await request.json().catch(() => ({}));
+      const { imageBase64, model: clientModel } = reqJson;
       if (!imageBase64) throw new Error('Thiếu trường imageBase64 trong request body');
 
       // 2. Lấy API Key
-      const apiKey = env.GROQ_API_KEY; 
-      if (!apiKey) throw new Error('API_KEY chưa được cấu hình trên Cloudflare');
+      const apiKey = env.GROQ_API_KEY || env.OPENROUTER_API_KEY; 
+      if (!apiKey) throw new Error('API_KEY chưa được cấu hình trên Cloudflare (GROQ_API_KEY hoặc OPENROUTER_API_KEY)');
+
+      const model = clientModel || "qwen/qwen3.6-27b";
+
+      const apiUrl = env.AI_API_URL || (
+        (model.includes('/') || env.OPENROUTER_API_KEY)
+          ? 'https://openrouter.ai/api/v1/chat/completions'
+          : API_URL
+      );
 
       // 3. Chuẩn bị payload cho OpenAI-compatible API
       const imageUrl = imageBase64.startsWith('data:image') 
@@ -41,7 +50,7 @@ export default {
         : `data:image/png;base64,${imageBase64}`;
 
       const payload = {
-        model: "qwen/qwen3.6-27b", 
+        model: model, 
         messages: [
           {
             role: "user",
@@ -72,13 +81,20 @@ CHỈ trả về JSON array thuần túy, không có markdown, không có giải
         max_tokens: 2048
       };
 
+      const headers = { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      };
+
+      if (apiUrl.includes('openrouter.ai')) {
+        headers['HTTP-Referer'] = 'https://vn2000-webtest.vercel.app';
+        headers['X-Title'] = 'VN2000 Sổ Đỏ OCR';
+      }
+
       // 4. Gọi API
-      const aiRes = await fetch(API_URL, {
+      const aiRes = await fetch(apiUrl, {
         method:  'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
+        headers: headers,
         body:    JSON.stringify(payload),
       });
 
