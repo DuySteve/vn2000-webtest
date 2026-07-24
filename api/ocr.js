@@ -34,17 +34,16 @@ export default async function handler(req, res) {
     let selectedModel = clientModel;
 
     if (!apiUrl) {
-      // Tự động nhận diện Provider dựa trên API Key
-      if (apiKey.startsWith('sk-or-') || process.env.OPENROUTER_API_KEY) {
+      if (apiKey.startsWith('gsk_')) {
+        // Khóa của Groq API
+        apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+        if (clientModel.includes('/')) {
+          selectedModel = 'llama-3.2-11b-vision-instruct';
+        }
+      } else {
+        // Mặc định dùng OpenRouter cho Qwen và các model vendor/model
         apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
         selectedModel = clientModel;
-      } else {
-        // Mặc định dùng Groq
-        apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-        // Nếu client yêu cầu model OpenRouter (chứa '/'), fallback sang vision model tương thích của Groq
-        if (clientModel.includes('/')) {
-          selectedModel = 'llama-3.2-90b-vision-preview';
-        }
       }
     }
 

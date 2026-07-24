@@ -39,14 +39,14 @@ export default {
       let selectedModel = reqModel;
 
       if (!apiUrl) {
-        if (apiKey.startsWith('sk-or-') || env.OPENROUTER_API_KEY) {
-          apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
-          selectedModel = reqModel;
-        } else {
+        if (apiKey.startsWith('gsk_')) {
           apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
           if (reqModel.includes('/')) {
-            selectedModel = 'llama-3.2-90b-vision-preview';
+            selectedModel = 'llama-3.2-11b-vision-instruct';
           }
+        } else {
+          apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+          selectedModel = reqModel;
         }
       }
 
