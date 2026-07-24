@@ -227,27 +227,20 @@ export default {
             content: [
               {
                 type: "text",
-                text: `Bạn là chuyên gia trắc địa Việt Nam. Hãy trích xuất TẤT CẢ các cặp tọa độ VN2000 (X, Y) từ bảng tọa độ trong hình ảnh này.
-
-QUY TẮC:
-- Tọa độ X (Northing) thường từ 500,000 đến 3,000,000
-- Tọa độ Y (Easting) thường từ 100,000 đến 900,000
-- Dữ liệu dạng X(m), Y(m) hoặc X, Y. Giữ nguyên dấu chấm thập phân (.) nếu có trong ảnh
-- Mỗi dòng bảng = 1 cặp tọa độ, đọc ĐỦ TẤT CẢ các dòng, không bỏ sót
-- CHỈ trả về duy nhất 1 JSON array thuần túy, không dùng markdown, không có giải thích hay suy nghĩ:
-[{"x": 2363228.565, "y": 520031.694}]`
+                text: "Đọc tọa độ X,Y từ bảng trong ảnh."
               },
               {
                 type: "image_url",
                 image_url: {
-                  url: imageUrl
+                  url: imageUrl,
+                  detail: "low"
                 }
               }
             ]
           }
         ],
         temperature: 0,
-        max_tokens: 2048
+        max_tokens: 1024
       };
 
       // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% tokens/request, tránh vượt TPM
