@@ -193,17 +193,19 @@ export default async function handler(req, res) {
       throw new Error('Thiếu trường imageBase64 trong request');
     }
 
-    const rawKey = process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY;
+    const rawKey = process.env.CEREBRAS_API_KEY || process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY;
     if (!rawKey) {
-      throw new Error('Chưa cấu hình GROQ_API_KEY trên Vercel');
+      throw new Error('Chưa cấu hình API Key (CEREBRAS_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY) trên Vercel');
     }
     const apiKey = rawKey.trim();
 
-    const selectedModel = req.body.model || "qwen/qwen3.6-27b";
+    const selectedModel = req.body.model || "gemma-4-31b";
     
     let apiUrl = process.env.AI_API_URL;
     if (!apiUrl) {
-      if (apiKey.startsWith('sk-or-') || process.env.OPENROUTER_API_KEY) {
+      if (process.env.CEREBRAS_API_KEY) {
+        apiUrl = 'https://api.cerebras.ai/v1/chat/completions';
+      } else if (apiKey.startsWith('sk-or-') || process.env.OPENROUTER_API_KEY) {
         apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
       } else {
         apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
