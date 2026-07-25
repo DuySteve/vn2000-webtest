@@ -177,7 +177,7 @@ function parseCoordinatesFromAIText(aiText) {
 const ALLOWED_ORIGIN = 'https://vn2000-webtest.vercel.app';
 const RATE_LIMIT_MAP = new Map();
 const RATE_LIMIT_WINDOW_MS = 60000;
-const MAX_REQUESTS_PER_IP = 10;
+const MAX_REQUESTS_PER_IP = 40;
 
 export default {
   async fetch(request, env, ctx) {
