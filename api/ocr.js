@@ -244,7 +244,7 @@ export default async function handler(req, res) {
     if (process.env.OPENROUTER_API_KEY) {
       providers.push({
         name: 'OpenRouter', apiKey: process.env.OPENROUTER_API_KEY.trim(),
-        apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: 'nvidia/nemotron-nano-12b-v2-vl:free'
+        apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: 'meta-llama/llama-3.2-11b-vision-instruct:free'
       });
     }
     if (providers.length === 0) {
@@ -299,7 +299,10 @@ export default async function handler(req, res) {
         if (data.error) { lastError = `${provider.name}: ${data.error.message}`; continue; }
 
         const aiText = data.choices?.[0]?.message?.content;
-        if (!aiText) { lastError = `${provider.name}: AI không trả về kết quả`; continue; }
+        if (!aiText) { 
+          lastError = `${provider.name}: AI trả về kết quả rỗng (Data: ${JSON.stringify(data)})`; 
+          continue; 
+        }
 
         const coordinates = parseCoordinatesFromAIText(aiText);
         if (coordinates.length === 0) { lastError = `${provider.name}: Không tìm thấy tọa độ`; continue; }
