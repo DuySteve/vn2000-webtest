@@ -204,7 +204,7 @@ async function onSoDoOcrUpload(e) {
 
   try {
     var processedImage = await preprocessImageForOCR(file);
-    showToast('Đang gửi ảnh lên AI Server...', 'info', 4000);
+    showToast('Đang quét ảnh bằng AI...', 'info', 4000);
     var response = await fetch(OCR_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -214,7 +214,8 @@ async function onSoDoOcrUpload(e) {
     if (!result.success) throw new Error(result.error);
     var points = result.data;
     if (!points || points.length === 0) throw new Error('AI không tìm thấy tọa độ nào hợp lệ.');
-    showToast('AI đã nhận diện ' + points.length + ' điểm!', 'success', 5000);
+    var providerName = result.provider || 'AI';
+    showToast(providerName + ' đã nhận diện ' + points.length + ' điểm!', 'success', 5000);
     var list = $('sodo-points-list');
     if (list) list.innerHTML = '';
     _soDoPointCount = 0;
