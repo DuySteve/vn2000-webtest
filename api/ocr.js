@@ -193,94 +193,91 @@ export default async function handler(req, res) {
       throw new Error('Thiếu trường imageBase64 trong request');
     }
 
-    const rawKey = process.env.CEREBRAS_API_KEY || process.env.GROQ_API_KEY || process.env.OPENROUTER_API_KEY;
-    if (!rawKey) {
-      throw new Error('Chưa cấu hình API Key (CEREBRAS_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY) trên Vercel');
+    // Xây dựng danh sách providers theo thứ tự ưu tiên
+    const providers = [];
+    if (process.env.CEREBRAS_API_KEY) {
+      providers.push({
+        name: 'Cerebras', apiKey: process.env.CEREBRAS_API_KEY.trim(),
+        apiUrl: 'https://api.cerebras.ai/v1/chat/completions', model: 'gemma-4-31b'
+      });
     }
-    const apiKey = rawKey.trim();
-
-    const selectedModel = req.body.model || "gemma-4-31b";
-    
-    let apiUrl = process.env.AI_API_URL;
-    if (!apiUrl) {
-      if (process.env.CEREBRAS_API_KEY) {
-        apiUrl = 'https://api.cerebras.ai/v1/chat/completions';
-      } else if (apiKey.startsWith('sk-or-') || process.env.OPENROUTER_API_KEY) {
-        apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
-      } else {
-        apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-      }
+    if (process.env.GROQ_API_KEY) {
+      providers.push({
+        name: 'Groq', apiKey: process.env.GROQ_API_KEY.trim(),
+        apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: 'qwen/qwen3.6-27b'
+      });
+    }
+    if (process.env.OPENROUTER_API_KEY) {
+      providers.push({
+        name: 'OpenRouter', apiKey: process.env.OPENROUTER_API_KEY.trim(),
+        apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: 'nvidia/nemotron-nano-12b-v2-vl:free'
+      });
+    }
+    if (providers.length === 0) {
+      throw new Error('Chưa cấu hình API Key nào (CEREBRAS_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY)');
     }
 
     const imageUrl = imageBase64.startsWith('data:image') 
       ? imageBase64 
       : `data:image/png;base64,${imageBase64}`;
 
-    const payload = {
-      model: selectedModel,
-      messages: [
-        {
-          role: "system",
-          content: "Output X Y per line. No text."
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "image_url",
-              image_url: {
-                url: imageUrl,
-                detail: "low"
-              }
-            }
-          ]
+    let lastError = null;
+
+    // Thử từng provider, fallback khi bị rate limit
+    for (const provider of providers) {
+      try {
+        const payload = {
+          model: provider.model,
+          messages: [
+            { role: "system", content: "Output X Y per line. No text." },
+            { role: "user", content: [{ type: "image_url", image_url: { url: imageUrl, detail: "low" } }] }
+          ],
+          temperature: 0,
+          max_tokens: 384
+        };
+
+        // reasoning_effort cho Groq reasoning models
+        if (REASONING_MODELS.some(m => provider.model.toLowerCase().includes(m.toLowerCase()))) {
+          payload.reasoning_effort = 'none';
         }
-      ],
-      temperature: 0,
-      max_tokens: 384
-    };
 
-    // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% tokens/request, tránh vượt TPM
-    if (REASONING_MODELS.some(m => selectedModel.toLowerCase().includes(m.toLowerCase()))) {
-      payload.reasoning_effort = 'none';
+        const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${provider.apiKey}` };
+        if (provider.name === 'OpenRouter') {
+          headers['HTTP-Referer'] = 'https://vn2000-webtest.vercel.app';
+          headers['X-Title'] = 'VN2000 So Do OCR';
+        }
+
+        const aiRes = await fetch(provider.apiUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+
+        // Rate limit → thử provider tiếp theo
+        if (aiRes.status === 429 || aiRes.status === 413) {
+          lastError = `${provider.name} rate limited (${aiRes.status})`;
+          continue;
+        }
+
+        if (!aiRes.ok) {
+          const errText = await aiRes.text();
+          lastError = `${provider.name} HTTP ${aiRes.status}: ${errText}`;
+          continue;
+        }
+
+        const data = await aiRes.json();
+        if (data.error) { lastError = `${provider.name}: ${data.error.message}`; continue; }
+
+        const aiText = data.choices?.[0]?.message?.content;
+        if (!aiText) { lastError = `${provider.name}: AI không trả về kết quả`; continue; }
+
+        const coordinates = parseCoordinatesFromAIText(aiText);
+        if (coordinates.length === 0) { lastError = `${provider.name}: Không tìm thấy tọa độ`; continue; }
+
+        return res.status(200).json({ success: true, data: coordinates, provider: provider.name });
+      } catch (e) {
+        lastError = `${provider.name}: ${e.message}`;
+        continue;
+      }
     }
 
-    const headers = { 
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    };
-
-    if (apiUrl.includes('openrouter.ai')) {
-      headers['HTTP-Referer'] = 'https://vn2000-webtest.vercel.app';
-      headers['X-Title'] = 'VN2000 So Do OCR';
-    }
-
-    const aiRes = await fetch(apiUrl, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(payload),
-    });
-
-    if (!aiRes.ok) {
-      const errText = await aiRes.text();
-      throw new Error(`Groq API HTTP ${aiRes.status}: ${errText}`);
-    }
-
-    const data = await aiRes.json();
-    if (data.error) {
-      throw new Error(`Groq API error: ${data.error.message}`);
-    }
-
-    const aiText = data.choices?.[0]?.message?.content;
-    if (!aiText) throw new Error('AI không trả về kết quả.');
-
-    const coordinates = parseCoordinatesFromAIText(aiText);
-
-    if (coordinates.length === 0) {
-      throw new Error('Không tìm thấy tọa độ nào trong ảnh.');
-    }
-
-    return res.status(200).json({ success: true, data: coordinates });
+    throw new Error(lastError || 'Tất cả providers đều thất bại');
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }

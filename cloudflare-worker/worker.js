@@ -198,103 +198,86 @@ export default {
       const { imageBase64, model: clientModel } = reqJson;
       if (!imageBase64) throw new Error('Thiếu trường imageBase64 trong request body');
 
-      // 2. Lấy API Key
-      const rawKey = env.CEREBRAS_API_KEY || env.GROQ_API_KEY || env.OPENROUTER_API_KEY; 
-      if (!rawKey) throw new Error('API_KEY chưa được cấu hình (CEREBRAS_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY)');
-      const apiKey = rawKey.trim();
-
-      const selectedModel = clientModel || "gemma-4-31b";
-      let apiUrl = env.AI_API_URL;
-
-      if (!apiUrl) {
-        if (env.CEREBRAS_API_KEY) {
-          apiUrl = 'https://api.cerebras.ai/v1/chat/completions';
-        } else if (apiKey.startsWith('sk-or-') || env.OPENROUTER_API_KEY) {
-          apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
-        } else {
-          apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-        }
+      // 2. Xây dựng danh sách providers
+      const providers = [];
+      if (env.CEREBRAS_API_KEY) {
+        providers.push({
+          name: 'Cerebras', apiKey: env.CEREBRAS_API_KEY.trim(),
+          apiUrl: 'https://api.cerebras.ai/v1/chat/completions', model: 'gemma-4-31b'
+        });
       }
+      if (env.GROQ_API_KEY) {
+        providers.push({
+          name: 'Groq', apiKey: env.GROQ_API_KEY.trim(),
+          apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: 'qwen/qwen3.6-27b'
+        });
+      }
+      if (env.OPENROUTER_API_KEY) {
+        providers.push({
+          name: 'OpenRouter', apiKey: env.OPENROUTER_API_KEY.trim(),
+          apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: 'nvidia/nemotron-nano-12b-v2-vl:free'
+        });
+      }
+      if (providers.length === 0) throw new Error('Chưa cấu hình API Key nào');
 
-      // 3. Chuẩn bị payload cho OpenAI-compatible API
       const imageUrl = imageBase64.startsWith('data:image') 
         ? imageBase64 
         : `data:image/png;base64,${imageBase64}`;
 
-      const payload = {
-        model: selectedModel, 
-        messages: [
-          {
-            role: "system",
-            content: "Output X Y per line. No text."
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: {
-                  url: imageUrl,
-                  detail: "low"
-                }
-              }
-            ]
+      let lastError = null;
+
+      for (const provider of providers) {
+        try {
+          const payload = {
+            model: provider.model,
+            messages: [
+              { role: "system", content: "Output X Y per line. No text." },
+              { role: "user", content: [{ type: "image_url", image_url: { url: imageUrl, detail: "low" } }] }
+            ],
+            temperature: 0,
+            max_tokens: 384
+          };
+
+          if (REASONING_MODELS.some(m => provider.model.toLowerCase().includes(m.toLowerCase()))) {
+            payload.reasoning_effort = 'none';
           }
-        ],
-        temperature: 0,
-        max_tokens: 384
-      };
 
-      // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% tokens/request, tránh vượt TPM
-      if (REASONING_MODELS.some(m => selectedModel.toLowerCase().includes(m.toLowerCase()))) {
-        payload.reasoning_effort = 'none';
+          const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${provider.apiKey}` };
+          if (provider.name === 'OpenRouter') {
+            headers['HTTP-Referer'] = 'https://vn2000-webtest.vercel.app';
+            headers['X-Title'] = 'VN2000 So Do OCR';
+          }
+
+          const aiRes = await fetch(provider.apiUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+
+          if (aiRes.status === 429 || aiRes.status === 413) {
+            lastError = `${provider.name} rate limited (${aiRes.status})`;
+            continue;
+          }
+          if (!aiRes.ok) {
+            lastError = `${provider.name} HTTP ${aiRes.status}: ${await aiRes.text()}`;
+            continue;
+          }
+
+          const data = await aiRes.json();
+          if (data.error) { lastError = `${provider.name}: ${data.error.message}`; continue; }
+
+          const aiText = data.choices?.[0]?.message?.content;
+          if (!aiText) { lastError = `${provider.name}: AI không trả về kết quả`; continue; }
+
+          const coordinates = parseCoordinatesFromAIText(aiText);
+          if (coordinates.length === 0) { lastError = `${provider.name}: Không tìm thấy tọa độ`; continue; }
+
+          return new Response(JSON.stringify({ success: true, data: coordinates, provider: provider.name }), {
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          });
+        } catch (e) {
+          lastError = `${provider.name}: ${e.message}`;
+          continue;
+        }
       }
 
-      const headers = { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      };
-
-      if (apiUrl.includes('openrouter.ai')) {
-        headers['HTTP-Referer'] = 'https://vn2000-webtest.vercel.app';
-        headers['X-Title'] = 'VN2000 So Do OCR';
-      }
-
-      // 4. Gọi API
-      const aiRes = await fetch(apiUrl, {
-        method:  'POST',
-        headers: headers,
-        body:    JSON.stringify(payload),
-      });
-
-      if (!aiRes.ok) {
-        const errBody = await aiRes.text();
-        throw new Error(`API HTTP ${aiRes.status}: ${errBody}`);
-      }
-
-      const data = await aiRes.json();
-
-      if (data.error) {
-        throw new Error(`API error: ${data.error.message}`);
-      }
-
-      // 5. Parse kết quả
-      const aiText = data.choices?.[0]?.message?.content;
-      if (!aiText) throw new Error('AI không trả về kết quả. Kiểm tra lại ảnh chụp.');
-
-      const coordinates = parseCoordinatesFromAIText(aiText);
-
-      if (coordinates.length === 0) {
-        throw new Error('Không tìm thấy tọa độ nào. Hãy chụp rõ nét vùng bảng tọa độ.');
-      }
-
-      // 6. Trả kết quả
-      return new Response(JSON.stringify({ success: true, data: coordinates }), {
-        headers: {
-          'Content-Type':                'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
+      throw new Error(lastError || 'Tất cả providers đều thất bại');
 
     } catch (err) {
       return new Response(
