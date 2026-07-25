@@ -139,11 +139,14 @@ function addSoDoPoint(xVal, yVal) {
   row.innerHTML =
     '<div class="sodo-point-label">P' + n + '</div>' +
     '<div class="sodo-point-inputs">' +
-      '<input type="text" class="input-field input-mono sodo-x" placeholder="X (Northing)" title="X = Northing, VD: 2363228" value="' + (xVal || '') + '" />' +
-      '<input type="text" class="input-field input-mono sodo-y" placeholder="Y (Easting)"  title="Y = Easting,  VD: 520031"  value="' + (yVal || '') + '" />' +
+      '<input type="text" class="input-field input-mono sodo-x" placeholder="X (Northing)" title="X = Northing, VD: 2363228" />' +
+      '<input type="text" class="input-field input-mono sodo-y" placeholder="Y (Easting)"  title="Y = Easting,  VD: 520031" />' +
     '</div>' +
     '<button class="sodo-remove-btn" title="Xóa điểm">✕</button>';
   list.appendChild(row);
+  
+  if (xVal !== undefined && xVal !== null) row.querySelector('.sodo-x').value = xVal;
+  if (yVal !== undefined && yVal !== null) row.querySelector('.sodo-y').value = yVal;
   row.querySelector('.sodo-remove-btn').addEventListener('click', function(){ row.remove(); });
   row.querySelectorAll('input').forEach(function(inp) {
     inp.addEventListener('keydown', function(e) {

@@ -174,22 +174,49 @@ function parseCoordinatesFromAIText(aiText) {
   return extracted;
 }
 
+const ALLOWED_ORIGIN = 'https://vn2000-webtest.vercel.app';
+const RATE_LIMIT_MAP = new Map();
+const RATE_LIMIT_WINDOW_MS = 60000;
+const MAX_REQUESTS_PER_IP = 10;
+
 export default {
   async fetch(request, env, ctx) {
+    const origin = request.headers.get('Origin');
+    const isLocalhost = origin && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'));
+    const allowed = (origin === ALLOWED_ORIGIN || isLocalhost) ? origin : ALLOWED_ORIGIN;
 
     // CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
-          'Access-Control-Allow-Origin':  '*',
+          'Access-Control-Allow-Origin': allowed,
           'Access-Control-Allow-Methods': 'POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
         },
       });
     }
 
+    if (origin && origin !== ALLOWED_ORIGIN && !isLocalhost) {
+      return new Response(JSON.stringify({ error: 'Forbidden: Origin not allowed' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+    }
+
     if (request.method !== 'POST') {
       return new Response('Only POST is allowed', { status: 405 });
+    }
+
+    // Security: Rate Limiting
+    const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+    if (ip !== 'unknown') {
+      const now = Date.now();
+      const userRecord = RATE_LIMIT_MAP.get(ip);
+      if (userRecord && (now - userRecord.startTime < RATE_LIMIT_WINDOW_MS)) {
+        if (userRecord.count >= MAX_REQUESTS_PER_IP) {
+          return new Response(JSON.stringify({ error: 'Quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.' }), { status: 429, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': allowed } });
+        }
+        userRecord.count++;
+      } else {
+        RATE_LIMIT_MAP.set(ip, { startTime: now, count: 1 });
+      }
     }
 
     try {
@@ -197,6 +224,11 @@ export default {
       const reqJson = await request.json().catch(() => ({}));
       const { imageBase64, model: clientModel } = reqJson;
       if (!imageBase64) throw new Error('Thiếu trường imageBase64 trong request body');
+      
+      // Security: Payload Size Limit (max ~500KB)
+      if (imageBase64.length > 500 * 1024) {
+        return new Response(JSON.stringify({ error: 'Payload quá lớn. Kích thước ảnh tối đa cho phép là ~500KB.' }), { status: 413, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': allowed } });
+      }
 
       // 2. Xây dựng danh sách providers
       const providers = [];
@@ -269,7 +301,7 @@ export default {
           if (coordinates.length === 0) { lastError = `${provider.name}: Không tìm thấy tọa độ`; continue; }
 
           return new Response(JSON.stringify({ success: true, data: coordinates, provider: provider.name }), {
-            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': allowed },
           });
         } catch (e) {
           lastError = `${provider.name}: ${e.message}`;
@@ -286,7 +318,7 @@ export default {
           status: 500,
           headers: {
             'Content-Type':                'application/json',
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': allowed || '*',
           },
         }
       );

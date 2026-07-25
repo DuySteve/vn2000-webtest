@@ -173,9 +173,18 @@ function parseCoordinatesFromAIText(aiText) {
   return extracted;
 }
 
+const ALLOWED_ORIGIN = 'https://vn2000-webtest.vercel.app';
+const RATE_LIMIT_MAP = new Map();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const MAX_REQUESTS_PER_IP = 10;
+
 export default async function handler(req, res) {
-  // CORS Preflight
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // CORS Preflight with strict origin checking
+  const origin = req.headers.origin;
+  const isLocalhost = origin && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'));
+  const allowed = (origin === ALLOWED_ORIGIN || isLocalhost) ? origin : ALLOWED_ORIGIN;
+  
+  res.setHeader('Access-Control-Allow-Origin', allowed);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -183,14 +192,39 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  // Security: Check Origin
+  if (origin && origin !== ALLOWED_ORIGIN && !isLocalhost) {
+    return res.status(403).json({ error: 'Forbidden: Origin not allowed' });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Security: Rate Limiting
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+  if (ip !== 'unknown') {
+    const now = Date.now();
+    const userRecord = RATE_LIMIT_MAP.get(ip);
+    if (userRecord && (now - userRecord.startTime < RATE_LIMIT_WINDOW_MS)) {
+      if (userRecord.count >= MAX_REQUESTS_PER_IP) {
+        return res.status(429).json({ error: 'Quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.' });
+      }
+      userRecord.count++;
+    } else {
+      RATE_LIMIT_MAP.set(ip, { startTime: now, count: 1 });
+    }
   }
 
   try {
     const { imageBase64 } = req.body;
     if (!imageBase64) {
       throw new Error('Thiếu trường imageBase64 trong request');
+    }
+
+    // Security: Payload Size Limit (max ~500KB since our frontend compressed image is ~20KB)
+    if (imageBase64.length > 500 * 1024) {
+      return res.status(413).json({ error: 'Payload quá lớn. Kích thước ảnh tối đa cho phép là ~500KB.' });
     }
 
     // Xây dựng danh sách providers theo thứ tự ưu tiên
