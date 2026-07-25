@@ -4,3 +4,9 @@ compatibility_date = "2025-01-01"
 
 [observability]
 enabled = true
+
+[vars]
+# Các secret key được cấu hình qua Cloudflare Dashboard (Settings > Variables and Secrets)
+# CEREBRAS_API_KEY = "" # Thêm qua Dashboard, không commit vào git
+# GROQ_API_KEY = ""
+# OPENROUTER_API_KEY = ""
