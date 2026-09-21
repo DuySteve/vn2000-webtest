@@ -1,6 +1,6 @@
 // Vercel Blob REST API — không cần package
 const BLOB_BASE = 'https://blob.vercel-storage.com';
-const CONFIG_PATH = 'vn2000-model-config.json';
+const CONFIG_PREFIX = 'vn2000-model-config';   // prefix để list; tên thực = prefix + random suffix
 
 export const config = {
   runtime: 'nodejs',
@@ -16,55 +16,67 @@ export const MODEL_DEFAULTS = {
   enabled:    { cerebras: true, groq: true, gemini: true, openrouter: true },
 };
 
-const getToken = () => process.env.BLOB_READ_WRITE_TOKEN || '';
+const getToken  = () => process.env.BLOB_READ_WRITE_TOKEN || '';
 const blobEnabled = () => !!getToken();
+const blobH = (token) => ({ Authorization: `Bearer ${token}`, 'x-api-version': '7' });
 
-// Shared headers — x-api-version:7 bắt buộc để API tự nhận store type (public/private)
-const blobHeaders = (token) => ({
-  Authorization: `Bearer ${token}`,
-  'x-api-version': '7',
-});
+// ── List tất cả blob config ───────────────────────────────────
+async function blobListAll(token) {
+  const r = await fetch(
+    `${BLOB_BASE}?prefix=${encodeURIComponent(CONFIG_PREFIX)}&limit=20`,
+    { headers: blobH(token) }
+  );
+  if (!r.ok) return [];
+  const { blobs } = await r.json();
+  return blobs || [];
+}
 
+// ── Xóa danh sách blob ────────────────────────────────────────
+async function blobDeleteUrls(token, urls) {
+  if (!urls.length) return;
+  // Vercel Blob delete: DELETE https://blob.vercel-storage.com
+  await fetch(BLOB_BASE, {
+    method: 'DELETE',
+    headers: { ...blobH(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ urls }),
+  });
+}
+
+// ── Đọc config ────────────────────────────────────────────────
 async function blobRead() {
   const token = getToken();
   if (!token) return { data: null, error: 'Không có BLOB_READ_WRITE_TOKEN' };
   try {
-    const listRes = await fetch(
-      `${BLOB_BASE}?prefix=${encodeURIComponent(CONFIG_PATH)}&limit=10`,
-      { headers: blobHeaders(token) }
-    );
-    if (!listRes.ok) {
-      const txt = await listRes.text();
-      return { data: null, error: `List ${listRes.status}: ${txt.slice(0,150)}` };
-    }
-    const { blobs } = await listRes.json();
-    if (!blobs?.length) return { data: null, error: 'Blob chưa tồn tại (chưa lưu lần đầu)' };
+    const blobs = await blobListAll(token);
+    if (!blobs.length) return { data: null, error: 'Chưa có blob (chưa lưu lần đầu)' };
+    // Lấy blob mới nhất
     const newest = blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0];
-    const dataRes = await fetch(`${newest.url}?t=${Date.now()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    });
-    if (!dataRes.ok) return { data: null, error: `Fetch blob ${dataRes.status} url=${newest.url}` };
-    const data = await dataRes.json();
+    // URL mới sau mỗi lần ghi → không bị CDN cache
+    const r = await fetch(newest.url, { cache: 'no-store' });
+    if (!r.ok) return { data: null, error: `Fetch blob ${r.status}: ${newest.url}` };
+    const data = await r.json();
     return { data, error: null, blobUrl: newest.url, blobCount: blobs.length };
   } catch (e) {
     return { data: null, error: `Exception: ${e.message}` };
   }
 }
 
+// ── Ghi config (xóa cũ → tạo mới với URL khác → không bị CDN cache) ──
 async function blobWrite(data) {
   const token = getToken();
-  if (!token) return { ok: false, error: 'BLOB_READ_WRITE_TOKEN chưa set' };
+  if (!token) return { ok: false, error: 'Không có BLOB_READ_WRITE_TOKEN' };
   try {
+    // 1. Xóa tất cả blob cũ
+    const existing = await blobListAll(token);
+    if (existing.length) {
+      await blobDeleteUrls(token, existing.map(b => b.url));
+    }
+    // 2. Tạo blob MỚI với addRandomSuffix=true → URL khác mỗi lần → CDN không cache được
     const res = await fetch(
-      `${BLOB_BASE}/${CONFIG_PATH}?addRandomSuffix=false&allowOverwrite=true`,
+      `${BLOB_BASE}/${CONFIG_PREFIX}.json?addRandomSuffix=true`,
       {
         method: 'PUT',
-        headers: {
-          ...blobHeaders(token),
-          'x-content-type': 'application/json',
-          // Không set x-access → tự động dùng access mode của store (public hoặc private)
-        },
+        headers: { ...blobH(token), 'x-content-type': 'application/json' },
         body: JSON.stringify(data),
       }
     );
@@ -78,11 +90,13 @@ async function blobWrite(data) {
   }
 }
 
+// ── Password ──────────────────────────────────────────────────
 function checkPassword(input) {
   const secret = process.env.ADMIN_PASSWORD || '';
   return secret !== '' && input.trim() === secret.trim();
 }
 
+// ── Handler ──────────────────────────────────────────────────
 export default async function handler(req, res) {
   const origin = req.headers.origin || '';
   const allowed = ['https://vn2000-webtest.vercel.app', 'http://localhost:3000'];
@@ -98,7 +112,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       blobEnabled: blobEnabled(),
-      blobDebug: blobError || null,   // hiện trong admin để debug
+      blobDebug: blobError || null,
       blobUrl: blobUrl || null,
       blobCount: blobCount || 0,
       models: {
