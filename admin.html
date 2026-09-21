@@ -413,12 +413,15 @@
 
       const dot = document.getElementById('kv-dot');
       const txt = document.getElementById('kv-text');
-      if (data.blobEnabled) {
+      if (data.blobDebug) {
+        dot.className = 'kv-dot off';
+        txt.innerHTML = `⚠️ Blob đọc thất bại: <b>${data.blobDebug}</b>`;
+      } else if (data.blobEnabled) {
         dot.className = 'kv-dot on';
-        txt.textContent = 'Vercel Blob đang hoạt động — thay đổi có hiệu lực ngay';
+        txt.innerHTML = `Vercel Blob hoạt động — ${data.blobCount || 0} blob(s) · <small style="opacity:0.6;word-break:break-all">${data.blobUrl || ''}</small>`;
       } else {
         dot.className = 'kv-dot off';
-        txt.innerHTML = 'Vercel Blob chưa cấu hình — thêm <code>BLOB_READ_WRITE_TOKEN</code> vào <a href="https://vercel.com/dashboard" target="_blank">Vercel → Settings</a>';
+        txt.innerHTML = 'Vercel Blob chưa cấu hình — thêm <code>BLOB_READ_WRITE_TOKEN</code>';
       }
 
       document.getElementById('login-screen').style.display = 'none';

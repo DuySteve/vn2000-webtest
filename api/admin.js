@@ -27,23 +27,29 @@ const blobHeaders = (token) => ({
 
 async function blobRead() {
   const token = getToken();
-  if (!token) return null;
+  if (!token) return { data: null, error: 'Không có BLOB_READ_WRITE_TOKEN' };
   try {
-    const r = await fetch(
+    const listRes = await fetch(
       `${BLOB_BASE}?prefix=${encodeURIComponent(CONFIG_PATH)}&limit=10`,
       { headers: blobHeaders(token) }
     );
-    if (!r.ok) return null;
-    const { blobs } = await r.json();
-    if (!blobs?.length) return null;
-    // Luôn lấy blob mới nhất (sort desc) + t=... để bypass CDN cache
+    if (!listRes.ok) {
+      const txt = await listRes.text();
+      return { data: null, error: `List ${listRes.status}: ${txt.slice(0,150)}` };
+    }
+    const { blobs } = await listRes.json();
+    if (!blobs?.length) return { data: null, error: 'Blob chưa tồn tại (chưa lưu lần đầu)' };
     const newest = blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0];
-    const data = await fetch(`${newest.url}?t=${Date.now()}`, {
+    const dataRes = await fetch(`${newest.url}?t=${Date.now()}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     });
-    return data.ok ? await data.json() : null;
-  } catch { return null; }
+    if (!dataRes.ok) return { data: null, error: `Fetch blob ${dataRes.status} url=${newest.url}` };
+    const data = await dataRes.json();
+    return { data, error: null, blobUrl: newest.url, blobCount: blobs.length };
+  } catch (e) {
+    return { data: null, error: `Exception: ${e.message}` };
+  }
 }
 
 async function blobWrite(data) {
@@ -88,10 +94,13 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     if (!checkPassword(req.query.password || ''))
       return res.status(401).json({ error: 'Sai mật khẩu admin' });
-    const stored = await blobRead();
+    const { data: stored, error: blobError, blobUrl, blobCount } = await blobRead();
     return res.status(200).json({
       success: true,
       blobEnabled: blobEnabled(),
+      blobDebug: blobError || null,   // hiện trong admin để debug
+      blobUrl: blobUrl || null,
+      blobCount: blobCount || 0,
       models: {
         cerebras:   stored?.cerebras   || MODEL_DEFAULTS.cerebras,
         groq:       stored?.groq       || MODEL_DEFAULTS.groq,
