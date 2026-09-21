@@ -61,6 +61,29 @@
     .logout-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 5px 11px; border-radius: 8px; cursor: pointer; font-size: 12px; transition: all var(--transition); }
     .logout-btn:hover { border-color: var(--border-hover); color: var(--text); }
 
+    /* Toggle switch */
+    .toggle-wrap { display: flex; align-items: center; flex-shrink: 0; }
+    .toggle { display: inline-flex; align-items: center; cursor: pointer; }
+    .toggle input { display: none; }
+    .toggle-track {
+      width: 34px; height: 19px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px; position: relative;
+      transition: background var(--transition), border-color var(--transition);
+    }
+    .toggle-track::after {
+      content: ''; position: absolute;
+      width: 13px; height: 13px; background: #fff; border-radius: 50%;
+      top: 2px; left: 2px; transition: transform var(--transition);
+    }
+    .toggle input:checked + .toggle-track { background: var(--success); border-color: var(--success); }
+    .toggle input:checked + .toggle-track::after { transform: translateX(15px); }
+
+    /* Disabled card state */
+    .provider-card.disabled { opacity: 0.45; }
+    .provider-card.disabled .provider-info input { pointer-events: none; }
+
     /* Blob status */
     .kv-status { display: flex; align-items: center; gap: 8px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 9px 13px; margin-bottom: 18px; font-size: 12px; }
     .kv-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
@@ -188,6 +211,12 @@
             <div class="provider-desc">Tốc độ cao nhất · CEREBRAS_API_KEY</div>
             <input id="m-cerebras" type="text" placeholder="gemma-4-31b" />
           </div>
+          <div class="toggle-wrap">
+            <label class="toggle" title="Bật/tắt Cerebras">
+              <input type="checkbox" id="en-cerebras" checked onchange="onToggle(this,'cerebras')" />
+              <span class="toggle-track"></span>
+            </label>
+          </div>
         </div>
 
         <div class="provider-card" draggable="true" data-key="groq">
@@ -198,6 +227,12 @@
             <div class="provider-name">Groq</div>
             <div class="provider-desc">Vision support · GROQ_API_KEY</div>
             <input id="m-groq" type="text" placeholder="qwen/qwen3.8-27b" />
+          </div>
+          <div class="toggle-wrap">
+            <label class="toggle" title="Bật/tắt Groq">
+              <input type="checkbox" id="en-groq" checked onchange="onToggle(this,'groq')" />
+              <span class="toggle-track"></span>
+            </label>
           </div>
         </div>
 
@@ -210,6 +245,12 @@
             <div class="provider-desc">Google AI · GEMINI_API_KEY</div>
             <input id="m-gemini" type="text" placeholder="gemini-2.0-flash-lite" />
           </div>
+          <div class="toggle-wrap">
+            <label class="toggle" title="Bật/tắt Gemini">
+              <input type="checkbox" id="en-gemini" checked onchange="onToggle(this,'gemini')" />
+              <span class="toggle-track"></span>
+            </label>
+          </div>
         </div>
 
         <div class="provider-card" draggable="true" data-key="openrouter">
@@ -220,6 +261,12 @@
             <div class="provider-name">OpenRouter</div>
             <div class="provider-desc">Fallback · OPENROUTER_API_KEY</div>
             <input id="m-openrouter" type="text" placeholder="google/gemma-4-31b-it:free" />
+          </div>
+          <div class="toggle-wrap">
+            <label class="toggle" title="Bật/tắt OpenRouter">
+              <input type="checkbox" id="en-openrouter" checked onchange="onToggle(this,'openrouter')" />
+              <span class="toggle-track"></span>
+            </label>
           </div>
         </div>
 
@@ -352,6 +399,16 @@
       document.getElementById('m-gemini').value     = data.models.gemini     || '';
       document.getElementById('m-openrouter').value = data.models.openrouter || '';
 
+      // Apply enabled state
+      const en = data.enabled || {};
+      ['cerebras','groq','gemini','openrouter'].forEach(k => {
+        const chk = document.getElementById('en-' + k);
+        if (chk) {
+          chk.checked = en[k] !== false;
+          onToggle(chk, k);
+        }
+      });
+
       applyOrder(data.order);
 
       const dot = document.getElementById('kv-dot');
@@ -383,8 +440,26 @@
     document.getElementById('m-groq').value       = defaults.groq       || 'qwen/qwen3.8-27b';
     document.getElementById('m-gemini').value     = defaults.gemini     || 'gemini-2.0-flash-lite';
     document.getElementById('m-openrouter').value = defaults.openrouter || 'google/gemma-4-31b-it:free';
+    ['cerebras','groq','gemini','openrouter'].forEach(k => {
+      const chk = document.getElementById('en-' + k);
+      if (chk) { chk.checked = true; onToggle(chk, k); }
+    });
     applyOrder(['cerebras','groq','gemini','openrouter']);
     toast('Đã khôi phục mặc định', 'warning');
+  }
+
+  function getEnabledState() {
+    const result = {};
+    ['cerebras','groq','gemini','openrouter'].forEach(k => {
+      const chk = document.getElementById('en-' + k);
+      result[k] = chk ? chk.checked : true;
+    });
+    return result;
+  }
+
+  function onToggle(chk, key) {
+    const card = providersEl.querySelector(`[data-key="${key}"]`);
+    if (card) card.classList.toggle('disabled', !chk.checked);
   }
 
   async function saveConfig() {
@@ -394,14 +469,15 @@
       gemini:     document.getElementById('m-gemini').value.trim(),
       openrouter: document.getElementById('m-openrouter').value.trim(),
     };
-    const order = getProviderOrder();
+    const order   = getProviderOrder();
+    const enabled = getEnabledState();
 
     setLoading('save', true);
     try {
       const res = await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: sessionPwd, models, order }),
+        body: JSON.stringify({ password: sessionPwd, models, order, enabled }),
       });
       const data = await res.json();
       if (res.ok) toast(data.message || 'Đã lưu!', 'success');

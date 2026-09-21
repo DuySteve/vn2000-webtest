@@ -15,6 +15,7 @@ const MODEL_DEFAULTS = {
   gemini:     process.env.MODEL_GEMINI     || 'gemini-2.0-flash-lite',
   openrouter: process.env.MODEL_OPENROUTER || 'google/gemma-4-31b-it:free',
   order:      ['cerebras', 'groq', 'gemini', 'openrouter'],
+  enabled:    { cerebras: true, groq: true, gemini: true, openrouter: true },
 };
 
 // In-memory TTL cache (60s) — tránh gọi Blob API mỗi request
@@ -37,6 +38,7 @@ async function getModelConfig() {
       gemini:     stored.gemini     || MODEL_DEFAULTS.gemini,
       openrouter: stored.openrouter || MODEL_DEFAULTS.openrouter,
       order:      Array.isArray(stored.order) ? stored.order : MODEL_DEFAULTS.order,
+      enabled:    stored.enabled ?? MODEL_DEFAULTS.enabled,
     };
     _cacheTs = now;
     return _configCache;
@@ -294,8 +296,10 @@ export default async function handler(req, res) {
       } : null,
     };
 
-    // Sắp xếp theo thứ tự trong config
+    // Sắp xếp theo thứ tự trong config, bỏ qua provider bị tắt
+    const enabled = modelConfig.enabled || MODEL_DEFAULTS.enabled;
     const providers = modelConfig.order
+      .filter(k => enabled[k] !== false)   // bỏ qua provider bị tắt
       .map(k => ALL_PROVIDERS[k])
       .filter(Boolean);
 
