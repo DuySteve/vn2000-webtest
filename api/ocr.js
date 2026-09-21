@@ -1,8 +1,10 @@
-import { list } from '@vercel/blob';
+// Vercel Blob REST API — không cần package @vercel/blob
+const BLOB_BASE = 'https://blob.vercel-storage.com';
+const BLOB_CONFIG_PATH = 'vn2000-model-config.json';
 
 export const config = {
-  runtime: 'nodejs', // Bắt buộc dùng Node.js thay vì Edge
-  regions: ['iad1'], // BẮT BUỘC ÉP CHẠY Ở MỸ (Washington D.C) để vượt rào Groq chặn IP Việt Nam
+  runtime: 'nodejs',
+  regions: ['iad1'],
 };
 
 // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% token, tránh vượt TPM Groq
@@ -24,14 +26,21 @@ let _cacheTs = 0;
 const CACHE_TTL = 60_000;
 
 async function getModelConfig() {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return { ...MODEL_DEFAULTS };
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) return { ...MODEL_DEFAULTS };
   const now = Date.now();
   if (_configCache && now - _cacheTs < CACHE_TTL) return _configCache;
   try {
-    const { blobs } = await list({ prefix: 'vn2000-model-config.json' });
-    if (!blobs.length) return { ...MODEL_DEFAULTS };
-    const res = await fetch(blobs[0].url, { cache: 'no-store' });
-    const stored = await res.json();
+    const listRes = await fetch(
+      `${BLOB_BASE}?prefix=${encodeURIComponent(BLOB_CONFIG_PATH)}&limit=1`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!listRes.ok) return { ...MODEL_DEFAULTS };
+    const { blobs } = await listRes.json();
+    if (!blobs?.length) return { ...MODEL_DEFAULTS };
+    const r = await fetch(blobs[0].url, { cache: 'no-store' });
+    if (!r.ok) return { ...MODEL_DEFAULTS };
+    const stored = await r.json();
     _configCache = {
       cerebras:   stored.cerebras   || MODEL_DEFAULTS.cerebras,
       groq:       stored.groq       || MODEL_DEFAULTS.groq,

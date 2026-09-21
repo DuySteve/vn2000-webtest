@@ -1,11 +1,11 @@
-import { put, list } from '@vercel/blob';
+// Vercel Blob REST API — không cần package @vercel/blob
+const BLOB_BASE = 'https://blob.vercel-storage.com';
+const CONFIG_PATH = 'vn2000-model-config.json';
 
 export const config = {
   runtime: 'nodejs',
   regions: ['iad1'],
 };
-
-const CONFIG_BLOB = 'vn2000-model-config.json';
 
 export const MODEL_DEFAULTS = {
   cerebras:   process.env.MODEL_CEREBRAS   || 'gemma-4-31b',
@@ -16,29 +16,52 @@ export const MODEL_DEFAULTS = {
   enabled:    { cerebras: true, groq: true, gemini: true, openrouter: true },
 };
 
-const blobEnabled = () => !!process.env.BLOB_READ_WRITE_TOKEN;
+const getToken = () => process.env.BLOB_READ_WRITE_TOKEN || '';
+const blobEnabled = () => !!getToken();
 
-// ── Blob helpers ─────────────────────────────────────────────
+// ── Blob REST helpers ────────────────────────────────────────
 async function blobRead() {
-  if (!blobEnabled()) return null;
+  const token = getToken();
+  if (!token) return null;
   try {
-    const { blobs } = await list({ prefix: CONFIG_BLOB });
-    if (!blobs.length) return null;
-    const res = await fetch(blobs[0].url, { cache: 'no-store' });
-    return await res.json();
+    // List để tìm blob (hỗ trợ addRandomSuffix=0 — URL ổn định)
+    const listRes = await fetch(
+      `${BLOB_BASE}?prefix=${encodeURIComponent(CONFIG_PATH)}&limit=1`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!listRes.ok) return null;
+    const { blobs } = await listRes.json();
+    if (!blobs?.length) return null;
+    const r = await fetch(blobs[0].url, { cache: 'no-store' });
+    if (!r.ok) return null;
+    return await r.json();
   } catch { return null; }
 }
 
 async function blobWrite(data) {
-  if (!blobEnabled()) return false;
+  const token = getToken();
+  if (!token) return { ok: false, error: 'BLOB_READ_WRITE_TOKEN chưa set' };
   try {
-    await put(CONFIG_BLOB, JSON.stringify(data), {
-      access: 'public',
-      addRandomSuffix: false,
-      contentType: 'application/json',
-    });
-    return true;
-  } catch { return false; }
+    const res = await fetch(
+      `${BLOB_BASE}/${CONFIG_PATH}?addRandomSuffix=0`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'x-content-type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      }
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }
 
 // ── Password check ────────────────────────────────────────────
@@ -87,7 +110,7 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'Chưa cấu hình BLOB_READ_WRITE_TOKEN.' });
     }
 
-    const ok = await blobWrite({
+    const result = await blobWrite({
       cerebras:   models.cerebras   || MODEL_DEFAULTS.cerebras,
       groq:       models.groq       || MODEL_DEFAULTS.groq,
       gemini:     models.gemini     || MODEL_DEFAULTS.gemini,
@@ -96,8 +119,8 @@ export default async function handler(req, res) {
       enabled:    (enabled && typeof enabled === 'object') ? enabled : MODEL_DEFAULTS.enabled,
     });
 
-    if (ok) return res.status(200).json({ success: true, message: 'Đã lưu cấu hình thành công!' });
-    return res.status(500).json({ error: 'Lỗi ghi vào Vercel Blob' });
+    if (result.ok) return res.status(200).json({ success: true, message: 'Đã lưu cấu hình thành công!' });
+    return res.status(500).json({ error: `Lỗi Vercel Blob: ${result.error}` });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
