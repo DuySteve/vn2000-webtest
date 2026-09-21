@@ -33,13 +33,14 @@ async function getModelConfig() {
   if (_configCache && now - _cacheTs < CACHE_TTL) return _configCache;
   try {
     const listRes = await fetch(
-      `${BLOB_BASE}?prefix=${encodeURIComponent(BLOB_CONFIG)}&limit=1`,
+      `${BLOB_BASE}?prefix=${encodeURIComponent(BLOB_CONFIG)}&limit=10`,
       { headers: { Authorization: `Bearer ${token}`, 'x-api-version': '7' } }
     );
     if (!listRes.ok) return { ...MODEL_DEFAULTS };
     const { blobs } = await listRes.json();
     if (!blobs?.length) return { ...MODEL_DEFAULTS };
-    const r = await fetch(blobs[0].url, {
+    const newest = blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0];
+    const r = await fetch(`${newest.url}?t=${Date.now()}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     });

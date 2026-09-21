@@ -30,14 +30,15 @@ async function blobRead() {
   if (!token) return null;
   try {
     const r = await fetch(
-      `${BLOB_BASE}?prefix=${encodeURIComponent(CONFIG_PATH)}&limit=1`,
+      `${BLOB_BASE}?prefix=${encodeURIComponent(CONFIG_PATH)}&limit=10`,
       { headers: blobHeaders(token) }
     );
     if (!r.ok) return null;
     const { blobs } = await r.json();
     if (!blobs?.length) return null;
-    // Thử fetch trực tiếp, nếu private thì gửi kèm auth
-    const data = await fetch(blobs[0].url, {
+    // Luôn lấy blob mới nhất (sort desc) + t=... để bypass CDN cache
+    const newest = blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0];
+    const data = await fetch(`${newest.url}?t=${Date.now()}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     });
