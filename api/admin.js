@@ -1,4 +1,5 @@
-import { put, list, getDownloadUrl } from '@vercel/blob';
+import { put, list } from '@vercel/blob';
+// NOTE: Store phải là PUBLIC. Config model không nhạy cảm, public là ổn.
 
 const CONFIG_PATH = 'vn2000-model-config.json';
 
@@ -24,9 +25,7 @@ async function blobRead() {
   try {
     const { blobs } = await list({ prefix: CONFIG_PATH });
     if (!blobs.length) return null;
-    // getDownloadUrl tạo signed URL cho private blob
-    const downloadUrl = await getDownloadUrl(blobs[0].url);
-    const r = await fetch(downloadUrl, { cache: 'no-store' });
+    const r = await fetch(blobs[0].url, { cache: 'no-store' });
     return r.ok ? await r.json() : null;
   } catch { return null; }
 }
@@ -35,7 +34,7 @@ async function blobWrite(data) {
   if (!blobEnabled()) return { ok: false, error: 'BLOB_READ_WRITE_TOKEN chưa set' };
   try {
     await put(CONFIG_PATH, JSON.stringify(data), {
-      access: 'private',
+      access: 'public',         // Yêu cầu PUBLIC blob store
       addRandomSuffix: false,
       contentType: 'application/json',
     });

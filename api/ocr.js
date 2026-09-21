@@ -1,4 +1,4 @@
-import { list, getDownloadUrl } from '@vercel/blob';
+import { list } from '@vercel/blob';
 
 export const config = {
   runtime: 'nodejs',
@@ -31,8 +31,7 @@ async function getModelConfig() {
   try {
     const { blobs } = await list({ prefix: 'vn2000-model-config.json' });
     if (!blobs?.length) return { ...MODEL_DEFAULTS };
-    const downloadUrl = await getDownloadUrl(blobs[0].url);
-    const r = await fetch(downloadUrl, { cache: 'no-store' });
+    const r = await fetch(blobs[0].url, { cache: 'no-store' });
     if (!r.ok) return { ...MODEL_DEFAULTS };
     const stored = await r.json();
     _configCache = {
