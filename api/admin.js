@@ -38,13 +38,10 @@ async function blobWrite(data) {
   } catch { return false; }
 }
 
-// ── Constant-time password check ─────────────────────────────
+// ── Password check ────────────────────────────────────────────
 function checkPassword(input) {
   const secret = process.env.ADMIN_PASSWORD || '';
-  if (!secret || input.length !== secret.length) return false;
-  let diff = 0;
-  for (let i = 0; i < secret.length; i++) diff |= input.charCodeAt(i) ^ secret.charCodeAt(i);
-  return diff === 0;
+  return secret !== '' && input.trim() === secret.trim();
 }
 
 // ── Handler ──────────────────────────────────────────────────
