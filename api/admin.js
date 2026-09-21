@@ -34,12 +34,13 @@ async function blobListAll(token) {
 // ── Xóa danh sách blob ────────────────────────────────────────
 async function blobDeleteUrls(token, urls) {
   if (!urls.length) return;
-  // Vercel Blob delete: DELETE https://blob.vercel-storage.com
-  await fetch(BLOB_BASE, {
-    method: 'DELETE',
-    headers: { ...blobH(token), 'Content-Type': 'application/json' },
+  // Vercel Blob delete API: POST /delete (không phải DELETE /)
+  const r = await fetch(`${BLOB_BASE}/delete`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ urls }),
   });
+  return r.ok;
 }
 
 // ── Đọc config ────────────────────────────────────────────────
