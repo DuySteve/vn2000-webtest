@@ -1,5 +1,5 @@
-// Vercel Blob REST API — không cần package @vercel/blob
-const BLOB_BASE = 'https://blob.vercel-storage.com';
+import { put, list, getDownloadUrl } from '@vercel/blob';
+
 const CONFIG_PATH = 'vn2000-model-config.json';
 
 export const config = {
@@ -16,54 +16,29 @@ export const MODEL_DEFAULTS = {
   enabled:    { cerebras: true, groq: true, gemini: true, openrouter: true },
 };
 
-const getToken = () => process.env.BLOB_READ_WRITE_TOKEN || '';
-const blobEnabled = () => !!getToken();
+const blobEnabled = () => !!process.env.BLOB_READ_WRITE_TOKEN;
 
-// ── Blob REST helpers ────────────────────────────────────────
+// ── Blob helpers (dùng @vercel/blob package — hỗ trợ private store) ──
 async function blobRead() {
-  const token = getToken();
-  if (!token) return null;
+  if (!blobEnabled()) return null;
   try {
-    // List để tìm blob (hỗ trợ addRandomSuffix=0 — URL ổn định)
-    const listRes = await fetch(
-      `${BLOB_BASE}?prefix=${encodeURIComponent(CONFIG_PATH)}&limit=1`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!listRes.ok) return null;
-    const { blobs } = await listRes.json();
-    if (!blobs?.length) return null;
-    // Private blob — cần auth header khi đọc
-    const r = await fetch(blobs[0].url, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    });
-    if (!r.ok) return null;
-    return await r.json();
+    const { blobs } = await list({ prefix: CONFIG_PATH });
+    if (!blobs.length) return null;
+    // getDownloadUrl tạo signed URL cho private blob
+    const downloadUrl = await getDownloadUrl(blobs[0].url);
+    const r = await fetch(downloadUrl, { cache: 'no-store' });
+    return r.ok ? await r.json() : null;
   } catch { return null; }
 }
 
 async function blobWrite(data) {
-  const token = getToken();
-  if (!token) return { ok: false, error: 'BLOB_READ_WRITE_TOKEN chưa set' };
+  if (!blobEnabled()) return { ok: false, error: 'BLOB_READ_WRITE_TOKEN chưa set' };
   try {
-    const body = JSON.stringify(data);
-    const res = await fetch(
-      `${BLOB_BASE}/${CONFIG_PATH}?addRandomSuffix=false`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'x-api-version': '7',           // Bắt buộc để API nhận biết private store
-          'x-content-type': 'application/json',
-          'Content-Type': 'application/octet-stream',
-        },
-        body,
-      }
-    );
-    if (!res.ok) {
-      const text = await res.text();
-      return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 300)}` };
-    }
+    await put(CONFIG_PATH, JSON.stringify(data), {
+      access: 'private',
+      addRandomSuffix: false,
+      contentType: 'application/json',
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };

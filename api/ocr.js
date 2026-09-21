@@ -1,6 +1,4 @@
-// Vercel Blob REST API — không cần package @vercel/blob
-const BLOB_BASE = 'https://blob.vercel-storage.com';
-const BLOB_CONFIG_PATH = 'vn2000-model-config.json';
+import { list, getDownloadUrl } from '@vercel/blob';
 
 export const config = {
   runtime: 'nodejs',
@@ -31,18 +29,10 @@ async function getModelConfig() {
   const now = Date.now();
   if (_configCache && now - _cacheTs < CACHE_TTL) return _configCache;
   try {
-    const listRes = await fetch(
-      `${BLOB_BASE}?prefix=${encodeURIComponent(BLOB_CONFIG_PATH)}&limit=1`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!listRes.ok) return { ...MODEL_DEFAULTS };
-    const { blobs } = await listRes.json();
+    const { blobs } = await list({ prefix: 'vn2000-model-config.json' });
     if (!blobs?.length) return { ...MODEL_DEFAULTS };
-    // Private blob — cần auth header
-    const r = await fetch(blobs[0].url, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    });
+    const downloadUrl = await getDownloadUrl(blobs[0].url);
+    const r = await fetch(downloadUrl, { cache: 'no-store' });
     if (!r.ok) return { ...MODEL_DEFAULTS };
     const stored = await r.json();
     _configCache = {

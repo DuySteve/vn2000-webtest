@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "VN2000 Web App",
   "type": "module",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@vercel/blob": "*"
+  }
 }
-
