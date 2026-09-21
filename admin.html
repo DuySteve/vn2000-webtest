@@ -10,302 +10,129 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --accent:      #A6192E;
-      --accent-hover:#8C1527;
-      --gold:        #D4AF37;
-      --bg:          #0d0a0b;
-      --bg-card:     #1a1214;
-      --bg-input:    #231719;
-      --border:      rgba(166,25,46,0.25);
-      --border-hover:rgba(166,25,46,0.5);
-      --text:        #f0e8e9;
-      --text-muted:  #8c7070;
-      --success:     #22c55e;
-      --error:       #ef4444;
-      --warning:     #f59e0b;
-      --radius:      14px;
-      --transition:  0.2s cubic-bezier(0.4,0,0.2,1);
+      --accent: #A6192E; --accent-hover: #8C1527; --gold: #D4AF37;
+      --bg: #0d0a0b; --bg-card: #1a1214; --bg-input: #231719;
+      --border: rgba(166,25,46,0.25); --border-hover: rgba(166,25,46,0.5);
+      --text: #f0e8e9; --text-muted: #8c7070;
+      --success: #22c55e; --error: #ef4444; --warning: #f59e0b;
+      --radius: 14px; --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
     }
+    html, body { min-height: 100vh; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); }
+    body { background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(166,25,46,0.18) 0%, transparent 70%); }
 
-    html, body {
-      min-height: 100vh;
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
+    .page { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; }
 
-    body {
-      background-image:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(166,25,46,0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 30% at 80% 100%, rgba(212,175,55,0.07) 0%, transparent 60%);
-    }
+    .header { text-align: center; margin-bottom: 28px; }
+    .header .logo { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .header .logo-icon { width: 42px; height: 42px; background: linear-gradient(135deg,var(--accent),#7a1020); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 16px rgba(166,25,46,0.4); }
+    .header h1 { font-size: 22px; font-weight: 700; background: linear-gradient(135deg,var(--text),var(--text-muted)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .badge { display: inline-block; background: rgba(166,25,46,0.2); border: 1px solid var(--border); color: #e87a8a; font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 20px; letter-spacing: 0.05em; text-transform: uppercase; }
 
-    /* ── Layout ──────────────────────────────────────── */
-    .page {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 24px 16px;
-    }
+    .card { width: 100%; max-width: 540px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); position: relative; overflow: hidden; }
+    .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(166,25,46,0.5), rgba(212,175,55,0.3), transparent); }
 
-    /* ── Header ──────────────────────────────────────── */
-    .header {
-      text-align: center;
-      margin-bottom: 32px;
-    }
-    .header .logo {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-    .header .logo-icon {
-      width: 42px; height: 42px;
-      background: linear-gradient(135deg, var(--accent), #7a1020);
-      border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px;
-      box-shadow: 0 4px 16px rgba(166,25,46,0.4);
-    }
-    .header h1 {
-      font-size: 22px; font-weight: 700;
-      background: linear-gradient(135deg, var(--text), var(--text-muted));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    }
-    .header .badge {
-      display: inline-block;
-      background: rgba(166,25,46,0.2);
-      border: 1px solid var(--border);
-      color: #e87a8a;
-      font-size: 11px; font-weight: 600;
-      padding: 2px 10px; border-radius: 20px;
-      letter-spacing: 0.05em; text-transform: uppercase;
-    }
+    /* Login */
+    #login-screen h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+    #login-screen p { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
 
-    /* ── Card ────────────────────────────────────────── */
-    .card {
-      width: 100%; max-width: 520px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 32px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) inset;
-      position: relative;
-      overflow: hidden;
-    }
-    .card::before {
-      content: '';
-      position: absolute; top: 0; left: 0; right: 0; height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(166,25,46,0.5), rgba(212,175,55,0.3), transparent);
-    }
-
-    /* ── Login Screen ────────────────────────────────── */
-    #login-screen h2 {
-      font-size: 18px; font-weight: 600; margin-bottom: 6px;
-    }
-    #login-screen p {
-      font-size: 13px; color: var(--text-muted); margin-bottom: 24px;
-    }
-
-    /* ── Form Elements ───────────────────────────────── */
-    .field { margin-bottom: 20px; }
-    .field label {
-      display: block;
-      font-size: 12px; font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.06em;
-      margin-bottom: 8px;
-    }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 7px; }
     .input-wrap { position: relative; }
-    input[type="password"],
-    input[type="text"] {
-      width: 100%;
-      background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px 16px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 13px; color: var(--text);
-      outline: none;
-      transition: border-color var(--transition), box-shadow var(--transition);
-    }
-    input:focus {
-      border-color: rgba(166,25,46,0.6);
-      box-shadow: 0 0 0 3px rgba(166,25,46,0.12);
-    }
-    input::placeholder { color: var(--text-muted); font-family: 'Inter', sans-serif; }
-
-    .toggle-pw {
-      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-      background: none; border: none; cursor: pointer;
-      color: var(--text-muted); font-size: 16px; padding: 4px;
-      transition: color var(--transition);
-    }
+    input[type="password"], input[type="text"] { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text); outline: none; transition: border-color var(--transition), box-shadow var(--transition); }
+    input:focus { border-color: rgba(166,25,46,0.6); box-shadow: 0 0 0 3px rgba(166,25,46,0.12); }
+    input::placeholder { color: var(--text-muted); font-family: 'Inter', sans-serif; font-size: 12px; }
+    .toggle-pw { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 15px; padding: 4px; }
     .toggle-pw:hover { color: var(--text); }
 
-    /* ── Buttons ─────────────────────────────────────── */
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      width: 100%; padding: 13px 24px;
-      border-radius: 10px; border: none; cursor: pointer;
-      font-family: 'Inter', sans-serif;
-      font-size: 14px; font-weight: 600;
-      transition: all var(--transition);
-      position: relative; overflow: hidden;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent), #7a1020);
-      color: #fff;
-      box-shadow: 0 4px 16px rgba(166,25,46,0.35);
-    }
-    .btn-primary:hover {
-      background: linear-gradient(135deg, var(--accent-hover), #6a0d1b);
-      box-shadow: 0 6px 24px rgba(166,25,46,0.5);
-      transform: translateY(-1px);
-    }
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 20px; border-radius: 10px; border: none; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; transition: all var(--transition); }
+    .btn-primary { background: linear-gradient(135deg,var(--accent),#7a1020); color: #fff; box-shadow: 0 4px 16px rgba(166,25,46,0.35); }
+    .btn-primary:hover { background: linear-gradient(135deg,var(--accent-hover),#6a0d1b); transform: translateY(-1px); }
     .btn-primary:active { transform: translateY(0); }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-    .btn-ghost {
-      background: transparent; color: var(--text-muted);
-      border: 1px solid var(--border);
-    }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
     .btn-ghost:hover { border-color: var(--border-hover); color: var(--text); }
 
-    /* ── Admin Panel ─────────────────────────────────── */
+    /* Admin panel */
     #admin-panel { display: none; }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .panel-header h2 { font-size: 16px; font-weight: 700; }
+    .logout-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 5px 11px; border-radius: 8px; cursor: pointer; font-size: 12px; transition: all var(--transition); }
+    .logout-btn:hover { border-color: var(--border-hover); color: var(--text); }
 
-    .panel-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 24px;
-    }
-    .panel-header h2 { font-size: 17px; font-weight: 700; }
-    .panel-header .logout-btn {
-      background: none; border: 1px solid var(--border);
-      color: var(--text-muted); padding: 6px 12px;
-      border-radius: 8px; cursor: pointer; font-size: 12px;
-      transition: all var(--transition);
-    }
-    .panel-header .logout-btn:hover { border-color: var(--border-hover); color: var(--text); }
-
-    /* ── KV Status Badge ─────────────────────────────── */
-    .kv-status {
-      display: flex; align-items: center; gap: 8px;
-      background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 10px; padding: 10px 14px;
-      margin-bottom: 24px; font-size: 12px;
-    }
-    .kv-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .kv-dot.on  { background: var(--success); box-shadow: 0 0 6px var(--success); animation: pulse 2s infinite; }
-    .kv-dot.off { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
-    }
+    /* Blob status */
+    .kv-status { display: flex; align-items: center; gap: 8px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 9px 13px; margin-bottom: 18px; font-size: 12px; }
+    .kv-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .kv-dot.on { background: var(--success); box-shadow: 0 0 6px var(--success); animation: pulse 2s infinite; }
+    .kv-dot.off { background: var(--warning); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
     .kv-status span { color: var(--text-muted); flex: 1; }
-    .kv-status a { color: var(--gold); text-decoration: none; font-weight: 500; }
-    .kv-status a:hover { text-decoration: underline; }
+    .kv-status a { color: var(--gold); text-decoration: none; }
 
-    /* ── Provider Cards ──────────────────────────────── */
-    .providers { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+    /* Drag hint */
+    .drag-hint { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+
+    /* Provider cards — draggable */
+    #providers { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
 
     .provider-card {
-      background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 12px; padding: 16px;
-      transition: border-color var(--transition);
+      background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; padding: 13px 14px;
+      display: flex; align-items: center; gap: 12px;
+      transition: border-color var(--transition), box-shadow var(--transition), opacity 0.2s;
+      cursor: default; user-select: none;
     }
     .provider-card:hover { border-color: var(--border-hover); }
+    .provider-card.drag-over { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(212,175,55,0.2); }
+    .provider-card.dragging { opacity: 0.35; }
 
-    .provider-header {
-      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
-    }
-    .provider-icon {
-      width: 32px; height: 32px; border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px; flex-shrink: 0;
-    }
+    .drag-handle { cursor: grab; color: var(--text-muted); font-size: 18px; line-height: 1; flex-shrink: 0; padding: 2px 4px; border-radius: 4px; transition: color var(--transition); }
+    .drag-handle:hover { color: var(--text); }
+    .drag-handle:active { cursor: grabbing; }
+
+    .priority-badge { width: 20px; height: 20px; border-radius: 50%; background: rgba(166,25,46,0.2); border: 1px solid var(--border); font-size: 10px; font-weight: 700; color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+    .provider-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
     .provider-icon.cerebras { background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); }
     .provider-icon.groq     { background: rgba(234,88,12,0.15);  border: 1px solid rgba(234,88,12,0.3); }
+    .provider-icon.gemini   { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); }
     .provider-icon.openrouter { background: rgba(212,175,55,0.12); border: 1px solid rgba(212,175,55,0.3); }
 
-    .provider-name { font-size: 13px; font-weight: 600; }
-    .provider-desc { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .provider-info { flex: 1; min-width: 0; }
+    .provider-name { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+    .provider-desc { font-size: 10px; color: var(--text-muted); margin-bottom: 7px; }
+    .provider-info input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(166,25,46,0.2); border-radius: 7px; padding: 7px 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); outline: none; transition: border-color var(--transition); }
+    .provider-info input:focus { border-color: rgba(166,25,46,0.5); }
 
-    .provider-card .field { margin-bottom: 0; }
-    .provider-card .field label { margin-bottom: 6px; font-size: 11px; }
-    .provider-card input { font-size: 12px; padding: 10px 14px; }
-
-    /* ── Actions ─────────────────────────────────────── */
+    /* Actions */
     .actions { display: flex; gap: 10px; }
-    .actions .btn-ghost { width: auto; flex: 1; }
+    .actions .btn-ghost { flex: 1; }
     .actions .btn-primary { flex: 2; }
 
-    /* ── Toast ───────────────────────────────────────── */
-    .toast-container {
-      position: fixed; bottom: 24px; right: 24px;
-      display: flex; flex-direction: column; gap: 8px;
-      z-index: 9999;
-    }
-    .toast {
-      display: flex; align-items: center; gap: 10px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px; padding: 14px 18px;
-      font-size: 13px; max-width: 320px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-      animation: slideIn 0.3s ease;
-    }
+    /* Spinner */
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Divider */
+    .divider { height: 1px; background: linear-gradient(90deg,transparent,var(--border),transparent); margin: 18px 0; }
+
+    /* Footer note */
+    .footer-note { text-align: center; margin-top: 16px; font-size: 11px; color: var(--text-muted); }
+    .footer-note a { color: var(--accent); text-decoration: none; }
+
+    /* Toast */
+    .toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 9999; }
+    .toast { display: flex; align-items: center; gap: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; font-size: 13px; max-width: 300px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); animation: slideIn 0.3s ease; }
     .toast.success { border-color: rgba(34,197,94,0.4); }
     .toast.error   { border-color: rgba(239,68,68,0.4); }
     .toast.warning { border-color: rgba(245,158,11,0.4); }
-    .toast-icon { font-size: 16px; }
-    @keyframes slideIn {
-      from { transform: translateX(120%); opacity: 0; }
-      to   { transform: translateX(0);    opacity: 1; }
-    }
-    @keyframes slideOut {
-      from { transform: translateX(0);    opacity: 1; }
-      to   { transform: translateX(120%); opacity: 0; }
-    }
-
-    /* ── Spinner ─────────────────────────────────────── */
-    .spinner {
-      width: 16px; height: 16px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      display: none;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Divider ─────────────────────────────────────── */
-    .divider {
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--border), transparent);
-      margin: 20px 0;
-    }
-
-    /* ── Footer note ─────────────────────────────────── */
-    .footer-note {
-      text-align: center; margin-top: 20px;
-      font-size: 11px; color: var(--text-muted);
-    }
-    .footer-note a { color: var(--accent); text-decoration: none; }
+    @keyframes slideIn  { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(120%); opacity: 0; } }
   </style>
 </head>
 <body>
 <div class="page">
 
-  <!-- Header -->
   <div class="header">
     <div class="logo">
       <div class="logo-icon">⚙️</div>
@@ -314,82 +141,84 @@
     <span class="badge">Restricted Access</span>
   </div>
 
-  <!-- Card -->
   <div class="card">
 
-    <!-- ── Login Screen ── -->
+    <!-- Login -->
     <div id="login-screen">
       <h2>Đăng nhập Admin</h2>
-      <p>Nhập mật khẩu admin để quản lý cấu hình AI model.</p>
-
+      <p>Quản lý cấu hình AI model và thứ tự ưu tiên.</p>
       <div class="field">
         <label>Mật khẩu Admin</label>
         <div class="input-wrap">
           <input id="pwd-input" type="password" placeholder="Nhập mật khẩu..." autocomplete="current-password" />
-          <button class="toggle-pw" onclick="togglePw()" type="button" title="Hiện/ẩn mật khẩu">👁</button>
+          <button class="toggle-pw" onclick="togglePw()" type="button">👁</button>
         </div>
       </div>
-
       <button class="btn btn-primary" id="login-btn" onclick="login()">
         <span class="spinner" id="login-spinner"></span>
         <span id="login-text">Đăng nhập</span>
       </button>
     </div>
 
-    <!-- ── Admin Panel ── -->
+    <!-- Admin Panel -->
     <div id="admin-panel">
       <div class="panel-header">
         <h2>🔧 Cấu hình AI Model</h2>
         <button class="logout-btn" onclick="logout()">Đăng xuất</button>
       </div>
 
-      <!-- KV Status -->
-      <div class="kv-status" id="kv-status">
+      <!-- Blob status -->
+      <div class="kv-status">
         <div class="kv-dot off" id="kv-dot"></div>
-        <span id="kv-text">Đang kiểm tra Vercel KV...</span>
+        <span id="kv-text">Đang kiểm tra Vercel Blob...</span>
       </div>
 
-      <!-- Provider Cards -->
-      <div class="providers">
+      <!-- Drag hint -->
+      <div class="drag-hint">⠿ Kéo thẻ để thay đổi thứ tự ưu tiên (trên = thử trước)</div>
 
-        <div class="provider-card">
-          <div class="provider-header">
-            <div class="provider-icon cerebras">🧠</div>
-            <div>
-              <div class="provider-name">Cerebras</div>
-              <div class="provider-desc">Primary · Tốc độ cao nhất</div>
-            </div>
-          </div>
-          <div class="field">
-            <label>Model ID</label>
+      <!-- Draggable providers -->
+      <div id="providers">
+
+        <div class="provider-card" draggable="true" data-key="cerebras">
+          <div class="drag-handle" title="Kéo để sắp xếp">⠿</div>
+          <div class="priority-badge" data-priority>1</div>
+          <div class="provider-icon cerebras">🧠</div>
+          <div class="provider-info">
+            <div class="provider-name">Cerebras</div>
+            <div class="provider-desc">Tốc độ cao nhất · CEREBRAS_API_KEY</div>
             <input id="m-cerebras" type="text" placeholder="gemma-4-31b" />
           </div>
         </div>
 
-        <div class="provider-card">
-          <div class="provider-header">
-            <div class="provider-icon groq">⚡</div>
-            <div>
-              <div class="provider-name">Groq</div>
-              <div class="provider-desc">Secondary · Vision support</div>
-            </div>
-          </div>
-          <div class="field">
-            <label>Model ID</label>
+        <div class="provider-card" draggable="true" data-key="groq">
+          <div class="drag-handle" title="Kéo để sắp xếp">⠿</div>
+          <div class="priority-badge" data-priority>2</div>
+          <div class="provider-icon groq">⚡</div>
+          <div class="provider-info">
+            <div class="provider-name">Groq</div>
+            <div class="provider-desc">Vision support · GROQ_API_KEY</div>
             <input id="m-groq" type="text" placeholder="qwen/qwen3.8-27b" />
           </div>
         </div>
 
-        <div class="provider-card">
-          <div class="provider-header">
-            <div class="provider-icon openrouter">🌐</div>
-            <div>
-              <div class="provider-name">OpenRouter</div>
-              <div class="provider-desc">Fallback · Free tier</div>
-            </div>
+        <div class="provider-card" draggable="true" data-key="gemini">
+          <div class="drag-handle" title="Kéo để sắp xếp">⠿</div>
+          <div class="priority-badge" data-priority>3</div>
+          <div class="provider-icon gemini">✨</div>
+          <div class="provider-info">
+            <div class="provider-name">Gemini</div>
+            <div class="provider-desc">Google AI · GEMINI_API_KEY</div>
+            <input id="m-gemini" type="text" placeholder="gemini-2.0-flash-lite" />
           </div>
-          <div class="field">
-            <label>Model ID</label>
+        </div>
+
+        <div class="provider-card" draggable="true" data-key="openrouter">
+          <div class="drag-handle" title="Kéo để sắp xếp">⠿</div>
+          <div class="priority-badge" data-priority>4</div>
+          <div class="provider-icon openrouter">🌐</div>
+          <div class="provider-info">
+            <div class="provider-name">OpenRouter</div>
+            <div class="provider-desc">Fallback · OPENROUTER_API_KEY</div>
             <input id="m-openrouter" type="text" placeholder="google/gemma-4-31b-it:free" />
           </div>
         </div>
@@ -407,21 +236,19 @@
       </div>
 
       <div class="footer-note">
-        Thay đổi có hiệu lực ngay lập tức (cần Vercel Blob).<br/>
-        Không có Blob? <a href="https://vercel.com/dashboard/stores" target="_blank">Tạo tại đây →</a>
+        Thay đổi có hiệu lực ngay (cần Vercel Blob).<br/>
+        Chưa có? <a href="https://vercel.com/dashboard/stores" target="_blank">Tạo tại đây →</a>
       </div>
     </div>
 
   </div>
 
-  <!-- Back link -->
-  <div style="margin-top:20px; text-align:center;">
-    <a href="/" style="color:var(--text-muted); font-size:12px; text-decoration:none;">← Quay lại ứng dụng</a>
+  <div style="margin-top:16px;text-align:center;">
+    <a href="/" style="color:var(--text-muted);font-size:12px;text-decoration:none;">← Quay lại ứng dụng</a>
   </div>
 
 </div>
 
-<!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
 
 <script>
@@ -429,145 +256,179 @@
   let sessionPwd = sessionStorage.getItem('admin_pwd') || '';
   let defaults = {};
 
-  // ── Enter key support ──────────────────────────────
-  document.getElementById('pwd-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') login();
-  });
-
-  // Auto-login if session password exists
+  document.getElementById('pwd-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
   if (sessionPwd) login(true);
 
-  // ── Toggle password visibility ─────────────────────
+  // ── Drag & Drop ───────────────────────────────────────
+  let dragSrc = null;
+  const providersEl = document.getElementById('providers');
+
+  providersEl.addEventListener('dragstart', e => {
+    dragSrc = e.target.closest('.provider-card');
+    if (!dragSrc) return;
+    setTimeout(() => dragSrc.classList.add('dragging'), 0);
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  providersEl.addEventListener('dragend', () => {
+    if (dragSrc) dragSrc.classList.remove('dragging');
+    dragSrc = null;
+    document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('drag-over'));
+    updatePriorityBadges();
+  });
+
+  providersEl.addEventListener('dragover', e => {
+    e.preventDefault();
+    const target = e.target.closest('.provider-card');
+    if (!target || target === dragSrc) return;
+    document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('drag-over'));
+    target.classList.add('drag-over');
+    // Insert before or after based on cursor position
+    const rect = target.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+      providersEl.insertBefore(dragSrc, target);
+    } else {
+      providersEl.insertBefore(dragSrc, target.nextSibling);
+    }
+  });
+
+  providersEl.addEventListener('dragleave', e => {
+    const target = e.target.closest('.provider-card');
+    if (target) target.classList.remove('drag-over');
+  });
+
+  providersEl.addEventListener('drop', e => {
+    e.preventDefault();
+    document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('drag-over'));
+  });
+
+  function updatePriorityBadges() {
+    [...providersEl.querySelectorAll('.provider-card')].forEach((card, i) => {
+      const badge = card.querySelector('[data-priority]');
+      if (badge) badge.textContent = i + 1;
+    });
+  }
+
+  function getProviderOrder() {
+    return [...providersEl.querySelectorAll('.provider-card')].map(c => c.dataset.key);
+  }
+
+  // Apply saved order from server
+  function applyOrder(order) {
+    if (!Array.isArray(order) || !order.length) return;
+    order.forEach(key => {
+      const card = providersEl.querySelector(`[data-key="${key}"]`);
+      if (card) providersEl.appendChild(card);
+    });
+    updatePriorityBadges();
+  }
+
+  // ── Toggle password ───────────────────────────────────
   function togglePw() {
     const inp = document.getElementById('pwd-input');
     inp.type = inp.type === 'password' ? 'text' : 'password';
   }
 
-  // ── Login ──────────────────────────────────────────
+  // ── Login ─────────────────────────────────────────────
   async function login(silent = false) {
     const pwd = silent ? sessionPwd : document.getElementById('pwd-input').value.trim();
     if (!pwd) { toast('Vui lòng nhập mật khẩu', 'warning'); return; }
-
     setLoading('login', true);
     try {
       const res = await fetch(`${API}?password=${encodeURIComponent(pwd)}`);
       const data = await res.json();
-
       if (!res.ok) {
         if (!silent) toast(data.error || 'Sai mật khẩu', 'error');
-        sessionStorage.removeItem('admin_pwd');
-        sessionPwd = '';
-        setLoading('login', false);
-        return;
+        sessionStorage.removeItem('admin_pwd'); sessionPwd = '';
+        setLoading('login', false); return;
       }
-
       sessionPwd = pwd;
       sessionStorage.setItem('admin_pwd', pwd);
       defaults = data.defaults || {};
 
-      // Fill in model values
       document.getElementById('m-cerebras').value   = data.models.cerebras   || '';
       document.getElementById('m-groq').value       = data.models.groq       || '';
+      document.getElementById('m-gemini').value     = data.models.gemini     || '';
       document.getElementById('m-openrouter').value = data.models.openrouter || '';
 
-      // KV status
-      const dot  = document.getElementById('kv-dot');
-      const text = document.getElementById('kv-text');
+      applyOrder(data.order);
+
+      const dot = document.getElementById('kv-dot');
+      const txt = document.getElementById('kv-text');
       if (data.blobEnabled) {
         dot.className = 'kv-dot on';
-        text.textContent = 'Vercel Blob đang hoạt động — thay đổi có hiệu lực ngay';
+        txt.textContent = 'Vercel Blob đang hoạt động — thay đổi có hiệu lực ngay';
       } else {
         dot.className = 'kv-dot off';
-        text.innerHTML = 'Vercel Blob chưa cấu hình — thêm <code>BLOB_READ_WRITE_TOKEN</code> vào <a href="https://vercel.com/dashboard" target="_blank">Vercel → Settings → Env Vars</a>';
+        txt.innerHTML = 'Vercel Blob chưa cấu hình — thêm <code>BLOB_READ_WRITE_TOKEN</code> vào <a href="https://vercel.com/dashboard" target="_blank">Vercel → Settings</a>';
       }
 
       document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('admin-panel').style.display = 'block';
+      document.getElementById('admin-panel').style.display  = 'block';
       if (!silent) toast('Đăng nhập thành công!', 'success');
-
-    } catch (e) {
-      toast('Lỗi kết nối: ' + e.message, 'error');
-    }
+    } catch (e) { toast('Lỗi kết nối: ' + e.message, 'error'); }
     setLoading('login', false);
   }
 
-  // ── Logout ─────────────────────────────────────────
   function logout() {
-    sessionStorage.removeItem('admin_pwd');
-    sessionPwd = '';
+    sessionStorage.removeItem('admin_pwd'); sessionPwd = '';
     document.getElementById('pwd-input').value = '';
     document.getElementById('login-screen').style.display = 'block';
-    document.getElementById('admin-panel').style.display = 'none';
+    document.getElementById('admin-panel').style.display  = 'none';
   }
 
-  // ── Reset defaults ─────────────────────────────────
   function resetDefaults() {
     document.getElementById('m-cerebras').value   = defaults.cerebras   || 'gemma-4-31b';
     document.getElementById('m-groq').value       = defaults.groq       || 'qwen/qwen3.8-27b';
+    document.getElementById('m-gemini').value     = defaults.gemini     || 'gemini-2.0-flash-lite';
     document.getElementById('m-openrouter').value = defaults.openrouter || 'google/gemma-4-31b-it:free';
-    toast('Đã khôi phục giá trị mặc định', 'warning');
+    applyOrder(['cerebras','groq','gemini','openrouter']);
+    toast('Đã khôi phục mặc định', 'warning');
   }
 
-  // ── Save config ────────────────────────────────────
   async function saveConfig() {
     const models = {
       cerebras:   document.getElementById('m-cerebras').value.trim(),
       groq:       document.getElementById('m-groq').value.trim(),
+      gemini:     document.getElementById('m-gemini').value.trim(),
       openrouter: document.getElementById('m-openrouter').value.trim(),
     };
-
-    if (!models.cerebras && !models.groq && !models.openrouter) {
-      toast('Vui lòng nhập ít nhất 1 model', 'warning');
-      return;
-    }
+    const order = getProviderOrder();
 
     setLoading('save', true);
     try {
       const res = await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: sessionPwd, models }),
+        body: JSON.stringify({ password: sessionPwd, models, order }),
       });
       const data = await res.json();
-
-      if (res.ok) {
-        toast(data.message || 'Đã lưu thành công!', 'success');
-      } else if (res.status === 503) {
-        toast('Cần cấu hình Vercel KV trước', 'warning');
-      } else if (res.status === 401) {
-        toast('Phiên đăng nhập hết hạn', 'error');
-        logout();
-      } else {
-        toast(data.error || 'Lỗi lưu cấu hình', 'error');
-      }
-    } catch (e) {
-      toast('Lỗi kết nối: ' + e.message, 'error');
-    }
+      if (res.ok) toast(data.message || 'Đã lưu!', 'success');
+      else if (res.status === 503) toast('Cần cấu hình Vercel Blob trước', 'warning');
+      else if (res.status === 401) { toast('Phiên hết hạn', 'error'); logout(); }
+      else toast(data.error || 'Lỗi', 'error');
+    } catch (e) { toast('Lỗi kết nối: ' + e.message, 'error'); }
     setLoading('save', false);
   }
 
-  // ── Loading state ──────────────────────────────────
   function setLoading(id, on) {
-    const btn = document.getElementById(id + '-btn');
-    const spinner = document.getElementById(id + '-spinner');
-    const text = document.getElementById(id + '-text');
+    const btn = document.getElementById(id+'-btn');
+    const sp  = document.getElementById(id+'-spinner');
+    const tx  = document.getElementById(id+'-text');
     if (!btn) return;
     btn.disabled = on;
-    spinner.style.display = on ? 'block' : 'none';
-    text.style.opacity = on ? '0.5' : '1';
+    if (sp) sp.style.display = on ? 'block' : 'none';
+    if (tx) tx.style.opacity = on ? '0.5' : '1';
   }
 
-  // ── Toast ──────────────────────────────────────────
   function toast(msg, type = 'success') {
     const icons = { success: '✅', error: '❌', warning: '⚠️' };
     const el = document.createElement('div');
     el.className = `toast ${type}`;
-    el.innerHTML = `<span class="toast-icon">${icons[type] || '💬'}</span><span>${msg}</span>`;
+    el.innerHTML = `<span>${icons[type]||'💬'}</span><span>${msg}</span>`;
     document.getElementById('toast-container').appendChild(el);
-    setTimeout(() => {
-      el.style.animation = 'slideOut 0.3s ease forwards';
-      setTimeout(() => el.remove(), 300);
-    }, 3500);
+    setTimeout(() => { el.style.animation = 'slideOut 0.3s ease forwards'; setTimeout(() => el.remove(), 300); }, 3500);
   }
 </script>
 </body>

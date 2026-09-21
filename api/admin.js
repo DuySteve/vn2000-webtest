@@ -10,7 +10,9 @@ const CONFIG_BLOB = 'vn2000-model-config.json';
 export const MODEL_DEFAULTS = {
   cerebras:   process.env.MODEL_CEREBRAS   || 'gemma-4-31b',
   groq:       process.env.MODEL_GROQ       || 'qwen/qwen3.8-27b',
+  gemini:     process.env.MODEL_GEMINI     || 'gemini-2.0-flash-lite',
   openrouter: process.env.MODEL_OPENROUTER || 'google/gemma-4-31b-it:free',
+  order:      ['cerebras', 'groq', 'gemini', 'openrouter'],
 };
 
 const blobEnabled = () => !!process.env.BLOB_READ_WRITE_TOKEN;
@@ -66,28 +68,32 @@ export default async function handler(req, res) {
       models: {
         cerebras:   stored?.cerebras   || MODEL_DEFAULTS.cerebras,
         groq:       stored?.groq       || MODEL_DEFAULTS.groq,
+        gemini:     stored?.gemini     || MODEL_DEFAULTS.gemini,
         openrouter: stored?.openrouter || MODEL_DEFAULTS.openrouter,
       },
+      order: stored?.order || MODEL_DEFAULTS.order,
       defaults: MODEL_DEFAULTS,
     });
   }
 
   // ── POST: lưu config ──
   if (req.method === 'POST') {
-    const { password, models } = req.body || {};
+    const { password, models, order } = req.body || {};
     if (!checkPassword(password || '')) return res.status(401).json({ error: 'Sai mật khẩu admin' });
     if (!models || typeof models !== 'object') return res.status(400).json({ error: 'Thiếu trường models' });
     if (!blobEnabled()) {
-      return res.status(503).json({ error: 'Chưa cấu hình BLOB_READ_WRITE_TOKEN trong Vercel → Settings → Environment Variables.' });
+      return res.status(503).json({ error: 'Chưa cấu hình BLOB_READ_WRITE_TOKEN.' });
     }
 
     const ok = await blobWrite({
       cerebras:   models.cerebras   || MODEL_DEFAULTS.cerebras,
       groq:       models.groq       || MODEL_DEFAULTS.groq,
+      gemini:     models.gemini     || MODEL_DEFAULTS.gemini,
       openrouter: models.openrouter || MODEL_DEFAULTS.openrouter,
+      order:      Array.isArray(order) ? order : MODEL_DEFAULTS.order,
     });
 
-    if (ok) return res.status(200).json({ success: true, message: 'Đã lưu cấu hình model thành công!' });
+    if (ok) return res.status(200).json({ success: true, message: 'Đã lưu cấu hình thành công!' });
     return res.status(500).json({ error: 'Lỗi ghi vào Vercel Blob' });
   }
 

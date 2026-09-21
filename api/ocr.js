@@ -12,7 +12,9 @@ const REASONING_MODELS = ['qwen/qwen3', 'qwen3', 'deepseek-r1', 'deepseek/deepse
 const MODEL_DEFAULTS = {
   cerebras:   process.env.MODEL_CEREBRAS   || 'gemma-4-31b',
   groq:       process.env.MODEL_GROQ       || 'qwen/qwen3.8-27b',
+  gemini:     process.env.MODEL_GEMINI     || 'gemini-2.0-flash-lite',
   openrouter: process.env.MODEL_OPENROUTER || 'google/gemma-4-31b-it:free',
+  order:      ['cerebras', 'groq', 'gemini', 'openrouter'],
 };
 
 // In-memory TTL cache (60s) — tránh gọi Blob API mỗi request
@@ -32,7 +34,9 @@ async function getModelConfig() {
     _configCache = {
       cerebras:   stored.cerebras   || MODEL_DEFAULTS.cerebras,
       groq:       stored.groq       || MODEL_DEFAULTS.groq,
+      gemini:     stored.gemini     || MODEL_DEFAULTS.gemini,
       openrouter: stored.openrouter || MODEL_DEFAULTS.openrouter,
+      order:      Array.isArray(stored.order) ? stored.order : MODEL_DEFAULTS.order,
     };
     _cacheTs = now;
     return _configCache;
@@ -262,89 +266,118 @@ export default async function handler(req, res) {
       return res.status(413).json({ error: 'Payload quá lớn. Kích thước ảnh tối đa cho phép là ~500KB.' });
     }
 
-    // Xây dựng danh sách providers theo thứ tự ưu tiên
-    // Model names đọc từ Vercel KV (admin panel) → env var → hardcoded default
+    // Xây dựng danh sách providers theo thứ tự ưu tiên từ admin config
     const modelConfig = await getModelConfig();
-    const providers = [];
-    if (process.env.CEREBRAS_API_KEY) {
-      providers.push({
-        name: 'Cerebras', apiKey: process.env.CEREBRAS_API_KEY.trim(),
-        apiUrl: 'https://api.cerebras.ai/v1/chat/completions', model: modelConfig.cerebras
-      });
-    }
-    if (process.env.GROQ_API_KEY) {
-      providers.push({
-        name: 'Groq', apiKey: process.env.GROQ_API_KEY.trim(),
-        apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: modelConfig.groq
-      });
-    }
-    if (process.env.OPENROUTER_API_KEY) {
-      providers.push({
-        name: 'OpenRouter', apiKey: process.env.OPENROUTER_API_KEY.trim(),
-        apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: modelConfig.openrouter
-      });
-    }
+    const ALL_PROVIDERS = {
+      cerebras: process.env.CEREBRAS_API_KEY ? {
+        name: 'Cerebras', type: 'openai',
+        apiKey: process.env.CEREBRAS_API_KEY.trim(),
+        apiUrl: 'https://api.cerebras.ai/v1/chat/completions',
+        model: modelConfig.cerebras,
+      } : null,
+      groq: process.env.GROQ_API_KEY ? {
+        name: 'Groq', type: 'openai',
+        apiKey: process.env.GROQ_API_KEY.trim(),
+        apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
+        model: modelConfig.groq,
+      } : null,
+      gemini: process.env.GEMINI_API_KEY ? {
+        name: 'Gemini', type: 'gemini',
+        apiKey: process.env.GEMINI_API_KEY.trim(),
+        model: modelConfig.gemini,
+      } : null,
+      openrouter: process.env.OPENROUTER_API_KEY ? {
+        name: 'OpenRouter', type: 'openai',
+        apiKey: process.env.OPENROUTER_API_KEY.trim(),
+        apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
+        model: modelConfig.openrouter,
+      } : null,
+    };
+
+    // Sắp xếp theo thứ tự trong config
+    const providers = modelConfig.order
+      .map(k => ALL_PROVIDERS[k])
+      .filter(Boolean);
+
     if (providers.length === 0) {
-      throw new Error('Chưa cấu hình API Key nào (CEREBRAS_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY)');
+      throw new Error('Chưa cấu hình API Key nào');
     }
 
-    const imageUrl = imageBase64.startsWith('data:image') 
-      ? imageBase64 
+    const imageUrl = imageBase64.startsWith('data:image')
+      ? imageBase64
       : `data:image/png;base64,${imageBase64}`;
 
     let lastError = null;
 
-    // Thử từng provider, fallback khi bị rate limit
     for (const provider of providers) {
       try {
-        const payload = {
-          model: provider.model,
-          messages: [
-            { role: "system", content: "Output X Y per line. No text." },
-            { role: "user", content: [{ type: "image_url", image_url: { url: imageUrl, detail: "low" } }] }
-          ],
-          temperature: 0,
-          max_tokens: 384
-        };
+        let aiText = null;
 
-        // reasoning_effort cho Groq reasoning models
-        if (REASONING_MODELS.some(m => provider.model.toLowerCase().includes(m.toLowerCase()))) {
-          payload.reasoning_effort = 'none';
-        }
+        if (provider.type === 'gemini') {
+          // ── Gemini API (format khác OpenAI) ──
+          const base64Data = imageBase64.startsWith('data:')
+            ? imageBase64.split(',')[1]
+            : imageBase64;
+          const mimeType = imageBase64.startsWith('data:')
+            ? imageBase64.split(';')[0].split(':')[1]
+            : 'image/png';
 
-        const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${provider.apiKey}` };
-        if (provider.name === 'OpenRouter') {
-          headers['HTTP-Referer'] = 'https://vn2000-webtest.vercel.app';
-          headers['X-Title'] = 'VN2000 So Do OCR';
-        }
+          const geminiPayload = {
+            contents: [{ parts: [
+              { text: 'Output X Y per line. No text.' },
+              { inline_data: { mime_type: mimeType, data: base64Data } },
+            ]}],
+            generationConfig: { temperature: 0, maxOutputTokens: 384 },
+          };
 
-        const aiRes = await fetch(provider.apiUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+          const gRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${provider.model}:generateContent?key=${provider.apiKey}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiPayload) }
+          );
 
-        // Rate limit → thử provider tiếp theo
-        if (aiRes.status === 429 || aiRes.status === 413) {
-          lastError = `${provider.name} rate limited (${aiRes.status})`;
-          continue;
-        }
+          if (gRes.status === 429) { lastError = 'Gemini rate limited'; continue; }
+          if (!gRes.ok) { lastError = `Gemini HTTP ${gRes.status}: ${await gRes.text()}`; continue; }
 
-        if (!aiRes.ok) {
-          const errText = await aiRes.text();
-          lastError = `${provider.name} HTTP ${aiRes.status}: ${errText}`;
-          continue;
-        }
+          const gData = await gRes.json();
+          aiText = gData.candidates?.[0]?.content?.parts?.[0]?.text || null;
+          if (!aiText) { lastError = 'Gemini: trả về kết quả rỗng'; continue; }
 
-        const data = await aiRes.json();
-        if (data.error) { lastError = `${provider.name}: ${data.error.message}`; continue; }
+        } else {
+          // ── OpenAI-compatible (Cerebras / Groq / OpenRouter) ──
+          const payload = {
+            model: provider.model,
+            messages: [
+              { role: 'system', content: 'Output X Y per line. No text.' },
+              { role: 'user', content: [{ type: 'image_url', image_url: { url: imageUrl, detail: 'low' } }] },
+            ],
+            temperature: 0,
+            max_tokens: 384,
+          };
 
-        const aiText = data.choices?.[0]?.message?.content;
-        if (!aiText) { 
-          lastError = `${provider.name}: AI trả về kết quả rỗng (Data: ${JSON.stringify(data)})`; 
-          continue; 
+          if (REASONING_MODELS.some(m => provider.model.toLowerCase().includes(m.toLowerCase()))) {
+            payload.reasoning_effort = 'none';
+          }
+
+          const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${provider.apiKey}` };
+          if (provider.name === 'OpenRouter') {
+            headers['HTTP-Referer'] = 'https://vn2000-webtest.vercel.app';
+            headers['X-Title'] = 'VN2000 So Do OCR';
+          }
+
+          const aiRes = await fetch(provider.apiUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+          if (aiRes.status === 429 || aiRes.status === 413) { lastError = `${provider.name} rate limited (${aiRes.status})`; continue; }
+          if (!aiRes.ok) { lastError = `${provider.name} HTTP ${aiRes.status}: ${await aiRes.text()}`; continue; }
+
+          const data = await aiRes.json();
+          if (data.error) { lastError = `${provider.name}: ${data.error.message}`; continue; }
+          aiText = data.choices?.[0]?.message?.content;
+          if (!aiText) { lastError = `${provider.name}: AI trả về kết quả rỗng`; continue; }
         }
 
         const coordinates = parseCoordinatesFromAIText(aiText);
         if (coordinates.length === 0) { lastError = `${provider.name}: Không tìm thấy tọa độ`; continue; }
-
         return res.status(200).json({ success: true, data: coordinates, provider: provider.name });
+
       } catch (e) {
         lastError = `${provider.name}: ${e.message}`;
         continue;
