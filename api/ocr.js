@@ -6,6 +6,34 @@ export const config = {
 // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% token, tránh vượt TPM Groq
 const REASONING_MODELS = ['qwen/qwen3', 'qwen3', 'deepseek-r1', 'deepseek/deepseek-r1'];
 
+// ── Model defaults (override bằng env var hoặc Vercel KV) ──
+const MODEL_DEFAULTS = {
+  cerebras:   process.env.MODEL_CEREBRAS   || 'gemma-4-31b',
+  groq:       process.env.MODEL_GROQ       || 'qwen/qwen3.8-27b',
+  openrouter: process.env.MODEL_OPENROUTER || 'google/gemma-4-31b-it:free',
+};
+
+// Đọc model config từ Vercel KV, fallback về defaults nếu KV chưa cấu hình
+async function getModelConfig() {
+  const kvUrl   = process.env.KV_REST_API_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN;
+  if (!kvUrl || !kvToken) return { ...MODEL_DEFAULTS };
+  try {
+    const [r1, r2, r3] = await Promise.all([
+      fetch(`${kvUrl}/get/model:cerebras`,   { headers: { Authorization: `Bearer ${kvToken}` } }).then(r => r.json()),
+      fetch(`${kvUrl}/get/model:groq`,       { headers: { Authorization: `Bearer ${kvToken}` } }).then(r => r.json()),
+      fetch(`${kvUrl}/get/model:openrouter`, { headers: { Authorization: `Bearer ${kvToken}` } }).then(r => r.json()),
+    ]);
+    return {
+      cerebras:   r1.result || MODEL_DEFAULTS.cerebras,
+      groq:       r2.result || MODEL_DEFAULTS.groq,
+      openrouter: r3.result || MODEL_DEFAULTS.openrouter,
+    };
+  } catch {
+    return { ...MODEL_DEFAULTS };
+  }
+}
+
 function parseVN2000Number(val) {
   if (typeof val === 'number') return val;
   if (!val || typeof val !== 'string') return null;
@@ -228,23 +256,25 @@ export default async function handler(req, res) {
     }
 
     // Xây dựng danh sách providers theo thứ tự ưu tiên
+    // Model names đọc từ Vercel KV (admin panel) → env var → hardcoded default
+    const modelConfig = await getModelConfig();
     const providers = [];
     if (process.env.CEREBRAS_API_KEY) {
       providers.push({
         name: 'Cerebras', apiKey: process.env.CEREBRAS_API_KEY.trim(),
-        apiUrl: 'https://api.cerebras.ai/v1/chat/completions', model: 'gemma-4-31b'
+        apiUrl: 'https://api.cerebras.ai/v1/chat/completions', model: modelConfig.cerebras
       });
     }
     if (process.env.GROQ_API_KEY) {
       providers.push({
         name: 'Groq', apiKey: process.env.GROQ_API_KEY.trim(),
-        apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: 'qwen/qwen3.8-27b'
+        apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: modelConfig.groq
       });
     }
     if (process.env.OPENROUTER_API_KEY) {
       providers.push({
         name: 'OpenRouter', apiKey: process.env.OPENROUTER_API_KEY.trim(),
-        apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: 'google/gemma-4-31b-it:free'
+        apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: modelConfig.openrouter
       });
     }
     if (providers.length === 0) {
