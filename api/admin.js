@@ -32,7 +32,11 @@ async function blobRead() {
     if (!listRes.ok) return null;
     const { blobs } = await listRes.json();
     if (!blobs?.length) return null;
-    const r = await fetch(blobs[0].url, { cache: 'no-store' });
+    // Private blob — cần auth header khi đọc
+    const r = await fetch(blobs[0].url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
     if (!r.ok) return null;
     return await r.json();
   } catch { return null; }
@@ -42,8 +46,9 @@ async function blobWrite(data) {
   const token = getToken();
   if (!token) return { ok: false, error: 'BLOB_READ_WRITE_TOKEN chưa set' };
   try {
+    // access=private — bắt buộc với private store
     const res = await fetch(
-      `${BLOB_BASE}/${CONFIG_PATH}?addRandomSuffix=0`,
+      `${BLOB_BASE}/${CONFIG_PATH}?addRandomSuffix=0&access=private`,
       {
         method: 'PUT',
         headers: {
@@ -56,7 +61,7 @@ async function blobWrite(data) {
     );
     if (!res.ok) {
       const text = await res.text();
-      return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+      return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 300)}` };
     }
     return { ok: true };
   } catch (e) {

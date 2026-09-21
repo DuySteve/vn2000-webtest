@@ -38,7 +38,11 @@ async function getModelConfig() {
     if (!listRes.ok) return { ...MODEL_DEFAULTS };
     const { blobs } = await listRes.json();
     if (!blobs?.length) return { ...MODEL_DEFAULTS };
-    const r = await fetch(blobs[0].url, { cache: 'no-store' });
+    // Private blob — cần auth header
+    const r = await fetch(blobs[0].url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
     if (!r.ok) return { ...MODEL_DEFAULTS };
     const stored = await r.json();
     _configCache = {
