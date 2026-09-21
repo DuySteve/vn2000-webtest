@@ -8,14 +8,17 @@ export const config = {
 // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% token, tránh vượt TPM Groq
 const REASONING_MODELS = ['qwen/qwen3', 'qwen3', 'deepseek-r1', 'deepseek/deepseek-r1'];
 
-// ── Model defaults (override bằng Vercel Blob admin panel hoặc env var) ──
+const BLOB_BASE = 'https://blob.vercel-storage.com';
+const BLOB_CONFIG = 'vn2000-model-config.json';
+
+// ── Model defaults (override bằng Vercel Blob REST API hoặc env var) ──
 const MODEL_DEFAULTS = {
-  cerebras:   process.env.MODEL_CEREBRAS   || 'gemma-4-31b',
-  groq:       process.env.MODEL_GROQ       || 'qwen/qwen3.8-27b',
-  gemini:     process.env.MODEL_GEMINI     || 'gemini-2.0-flash-lite',
+  cerebras: process.env.MODEL_CEREBRAS || 'gemma-4-31b',
+  groq: process.env.MODEL_GROQ || 'qwen/qwen3.8-27b',
+  gemini: process.env.MODEL_GEMINI || 'gemini-2.0-flash-lite',
   openrouter: process.env.MODEL_OPENROUTER || 'google/gemma-4-31b-it:free',
-  order:      ['cerebras', 'groq', 'gemini', 'openrouter'],
-  enabled:    { cerebras: true, groq: true, gemini: true, openrouter: true },
+  order: ['cerebras', 'groq', 'gemini', 'openrouter'],
+  enabled: { cerebras: true, groq: true, gemini: true, openrouter: true },
 };
 
 // In-memory TTL cache (60s) — tránh gọi Blob API mỗi request
@@ -29,18 +32,26 @@ async function getModelConfig() {
   const now = Date.now();
   if (_configCache && now - _cacheTs < CACHE_TTL) return _configCache;
   try {
-    const { blobs } = await list({ prefix: 'vn2000-model-config.json' });
+    const listRes = await fetch(
+      `${BLOB_BASE}?prefix=${encodeURIComponent(BLOB_CONFIG)}&limit=1`,
+      { headers: { Authorization: `Bearer ${token}`, 'x-api-version': '7' } }
+    );
+    if (!listRes.ok) return { ...MODEL_DEFAULTS };
+    const { blobs } = await listRes.json();
     if (!blobs?.length) return { ...MODEL_DEFAULTS };
-    const r = await fetch(blobs[0].url, { cache: 'no-store' });
+    const r = await fetch(blobs[0].url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
     if (!r.ok) return { ...MODEL_DEFAULTS };
     const stored = await r.json();
     _configCache = {
-      cerebras:   stored.cerebras   || MODEL_DEFAULTS.cerebras,
-      groq:       stored.groq       || MODEL_DEFAULTS.groq,
-      gemini:     stored.gemini     || MODEL_DEFAULTS.gemini,
+      cerebras: stored.cerebras || MODEL_DEFAULTS.cerebras,
+      groq: stored.groq || MODEL_DEFAULTS.groq,
+      gemini: stored.gemini || MODEL_DEFAULTS.gemini,
       openrouter: stored.openrouter || MODEL_DEFAULTS.openrouter,
-      order:      Array.isArray(stored.order) ? stored.order : MODEL_DEFAULTS.order,
-      enabled:    stored.enabled ?? MODEL_DEFAULTS.enabled,
+      order: Array.isArray(stored.order) ? stored.order : MODEL_DEFAULTS.order,
+      enabled: stored.enabled ?? MODEL_DEFAULTS.enabled,
     };
     _cacheTs = now;
     return _configCache;
@@ -54,7 +65,7 @@ function parseVN2000Number(val) {
   if (!val || typeof val !== 'string') return null;
 
   let str = val.trim();
-  
+
   if ((str.match(/\./g) || []).length > 1) {
     str = str.replace(/\./g, '').replace(',', '.');
   } else if ((str.match(/,/g) || []).length > 1) {
@@ -147,7 +158,7 @@ function parseCoordinatesFromAIText(aiText) {
 
   // 2. Thử parse các khối JSON
   let jsonCandidates = [];
-  
+
   const matchArray = cleanText.match(/\[\s*[\s\S]*\s*\]/);
   if (matchArray) jsonCandidates.push(matchArray[0]);
 
@@ -169,7 +180,7 @@ function parseCoordinatesFromAIText(aiText) {
         const result = arr.map(sanitizeItem).filter(Boolean);
         if (result.length > 0) return result;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Sửa các lỗi cú pháp JSON thông thường
     let sanitizedStr = rawStr
@@ -184,7 +195,7 @@ function parseCoordinatesFromAIText(aiText) {
         const result = arr.map(sanitizeItem).filter(Boolean);
         if (result.length > 0) return result;
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // 3. Fallback: Quét Regex theo dòng (đọc trực tiếp mọi định dạng Bảng / Text)
@@ -226,7 +237,7 @@ export default async function handler(req, res) {
   const origin = req.headers.origin;
   const isLocalhost = origin && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'));
   const allowed = (origin === ALLOWED_ORIGIN || isLocalhost) ? origin : ALLOWED_ORIGIN;
-  
+
   res.setHeader('Access-Control-Allow-Origin', allowed);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -329,10 +340,12 @@ export default async function handler(req, res) {
             : 'image/png';
 
           const geminiPayload = {
-            contents: [{ parts: [
-              { text: 'Output X Y per line. No text.' },
-              { inline_data: { mime_type: mimeType, data: base64Data } },
-            ]}],
+            contents: [{
+              parts: [
+                { text: 'Output X Y per line. No text.' },
+                { inline_data: { mime_type: mimeType, data: base64Data } },
+              ]
+            }],
             generationConfig: { temperature: 0, maxOutputTokens: 384 },
           };
 

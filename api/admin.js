@@ -1,6 +1,5 @@
-import { put, list } from '@vercel/blob';
-// NOTE: Store phải là PUBLIC. Config model không nhạy cảm, public là ổn.
-
+// Vercel Blob REST API — không cần package
+const BLOB_BASE = 'https://blob.vercel-storage.com';
 const CONFIG_PATH = 'vn2000-model-config.json';
 
 export const config = {
@@ -17,54 +16,77 @@ export const MODEL_DEFAULTS = {
   enabled:    { cerebras: true, groq: true, gemini: true, openrouter: true },
 };
 
-const blobEnabled = () => !!process.env.BLOB_READ_WRITE_TOKEN;
+const getToken = () => process.env.BLOB_READ_WRITE_TOKEN || '';
+const blobEnabled = () => !!getToken();
 
-// ── Blob helpers (dùng @vercel/blob package — hỗ trợ private store) ──
+// Shared headers — x-api-version:7 bắt buộc để API tự nhận store type (public/private)
+const blobHeaders = (token) => ({
+  Authorization: `Bearer ${token}`,
+  'x-api-version': '7',
+});
+
 async function blobRead() {
-  if (!blobEnabled()) return null;
+  const token = getToken();
+  if (!token) return null;
   try {
-    const { blobs } = await list({ prefix: CONFIG_PATH });
-    if (!blobs.length) return null;
-    const r = await fetch(blobs[0].url, { cache: 'no-store' });
-    return r.ok ? await r.json() : null;
+    const r = await fetch(
+      `${BLOB_BASE}?prefix=${encodeURIComponent(CONFIG_PATH)}&limit=1`,
+      { headers: blobHeaders(token) }
+    );
+    if (!r.ok) return null;
+    const { blobs } = await r.json();
+    if (!blobs?.length) return null;
+    // Thử fetch trực tiếp, nếu private thì gửi kèm auth
+    const data = await fetch(blobs[0].url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    return data.ok ? await data.json() : null;
   } catch { return null; }
 }
 
 async function blobWrite(data) {
-  if (!blobEnabled()) return { ok: false, error: 'BLOB_READ_WRITE_TOKEN chưa set' };
+  const token = getToken();
+  if (!token) return { ok: false, error: 'BLOB_READ_WRITE_TOKEN chưa set' };
   try {
-    await put(CONFIG_PATH, JSON.stringify(data), {
-      access: 'public',         // Yêu cầu PUBLIC blob store
-      addRandomSuffix: false,
-      contentType: 'application/json',
-    });
+    const res = await fetch(
+      `${BLOB_BASE}/${CONFIG_PATH}?addRandomSuffix=false`,
+      {
+        method: 'PUT',
+        headers: {
+          ...blobHeaders(token),
+          'x-content-type': 'application/json',
+          // Không set x-access → tự động dùng access mode của store (public hoặc private)
+        },
+        body: JSON.stringify(data),
+      }
+    );
+    if (!res.ok) {
+      const txt = await res.text();
+      return { ok: false, error: `HTTP ${res.status}: ${txt.slice(0, 300)}` };
+    }
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
   }
 }
 
-// ── Password check ────────────────────────────────────────────
 function checkPassword(input) {
   const secret = process.env.ADMIN_PASSWORD || '';
   return secret !== '' && input.trim() === secret.trim();
 }
 
-// ── Handler ──────────────────────────────────────────────────
 export default async function handler(req, res) {
   const origin = req.headers.origin || '';
-  const allowed = ['https://vn2000-webtest.vercel.app', 'http://localhost:3000', 'http://127.0.0.1:3000'];
-  const isAllowed = allowed.some(o => origin.startsWith(o));
-  res.setHeader('Access-Control-Allow-Origin', isAllowed ? origin : allowed[0]);
+  const allowed = ['https://vn2000-webtest.vercel.app', 'http://localhost:3000'];
+  res.setHeader('Access-Control-Allow-Origin', allowed.some(o => origin.startsWith(o)) ? origin : allowed[0]);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // ── GET: đọc config ──
   if (req.method === 'GET') {
-    const pwd = req.query.password || '';
-    if (!checkPassword(pwd)) return res.status(401).json({ error: 'Sai mật khẩu admin' });
-
+    if (!checkPassword(req.query.password || ''))
+      return res.status(401).json({ error: 'Sai mật khẩu admin' });
     const stored = await blobRead();
     return res.status(200).json({
       success: true,
@@ -81,14 +103,14 @@ export default async function handler(req, res) {
     });
   }
 
-  // ── POST: lưu config ──
   if (req.method === 'POST') {
     const { password, models, order, enabled } = req.body || {};
-    if (!checkPassword(password || '')) return res.status(401).json({ error: 'Sai mật khẩu admin' });
-    if (!models || typeof models !== 'object') return res.status(400).json({ error: 'Thiếu trường models' });
-    if (!blobEnabled()) {
-      return res.status(503).json({ error: 'Chưa cấu hình BLOB_READ_WRITE_TOKEN.' });
-    }
+    if (!checkPassword(password || ''))
+      return res.status(401).json({ error: 'Sai mật khẩu admin' });
+    if (!models || typeof models !== 'object')
+      return res.status(400).json({ error: 'Thiếu trường models' });
+    if (!blobEnabled())
+      return res.status(503).json({ error: 'Chưa cấu hình BLOB_READ_WRITE_TOKEN' });
 
     const result = await blobWrite({
       cerebras:   models.cerebras   || MODEL_DEFAULTS.cerebras,
@@ -99,8 +121,8 @@ export default async function handler(req, res) {
       enabled:    (enabled && typeof enabled === 'object') ? enabled : MODEL_DEFAULTS.enabled,
     });
 
-    if (result.ok) return res.status(200).json({ success: true, message: 'Đã lưu cấu hình thành công!' });
-    return res.status(500).json({ error: `Lỗi Vercel Blob: ${result.error}` });
+    if (result.ok) return res.status(200).json({ success: true, message: 'Đã lưu thành công!' });
+    return res.status(500).json({ error: `Lỗi Blob: ${result.error}` });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
