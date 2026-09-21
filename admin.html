@@ -407,8 +407,8 @@
       </div>
 
       <div class="footer-note">
-        Thay đổi có hiệu lực ngay lập tức (cần Vercel KV).<br/>
-        Không có KV? <a href="https://vercel.com/dashboard/stores" target="_blank">Tạo tại đây →</a>
+        Thay đổi có hiệu lực ngay lập tức (cần Vercel Blob).<br/>
+        Không có Blob? <a href="https://vercel.com/dashboard/stores" target="_blank">Tạo tại đây →</a>
       </div>
     </div>
 
@@ -473,12 +473,12 @@
       // KV status
       const dot  = document.getElementById('kv-dot');
       const text = document.getElementById('kv-text');
-      if (data.kvEnabled) {
+      if (data.blobEnabled) {
         dot.className = 'kv-dot on';
-        text.textContent = 'Vercel KV đang hoạt động — thay đổi có hiệu lực ngay';
+        text.textContent = 'Vercel Blob đang hoạt động — thay đổi có hiệu lực ngay';
       } else {
         dot.className = 'kv-dot off';
-        text.innerHTML = 'Vercel KV chưa cấu hình — <a href="https://vercel.com/dashboard/stores" target="_blank">Tạo KV store</a> để bật tính năng này';
+        text.innerHTML = 'Vercel Blob chưa cấu hình — thêm <code>BLOB_READ_WRITE_TOKEN</code> vào <a href="https://vercel.com/dashboard" target="_blank">Vercel → Settings → Env Vars</a>';
       }
 
       document.getElementById('login-screen').style.display = 'none';

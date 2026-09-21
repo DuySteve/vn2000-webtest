@@ -1,3 +1,5 @@
+import { list } from '@vercel/blob';
+
 export const config = {
   runtime: 'nodejs', // Bắt buộc dùng Node.js thay vì Edge
   regions: ['iad1'], // BẮT BUỘC ÉP CHẠY Ở MỸ (Washington D.C) để vượt rào Groq chặn IP Việt Nam
@@ -6,29 +8,34 @@ export const config = {
 // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% token, tránh vượt TPM Groq
 const REASONING_MODELS = ['qwen/qwen3', 'qwen3', 'deepseek-r1', 'deepseek/deepseek-r1'];
 
-// ── Model defaults (override bằng env var hoặc Vercel KV) ──
+// ── Model defaults (override bằng Vercel Blob admin panel hoặc env var) ──
 const MODEL_DEFAULTS = {
   cerebras:   process.env.MODEL_CEREBRAS   || 'gemma-4-31b',
   groq:       process.env.MODEL_GROQ       || 'qwen/qwen3.8-27b',
   openrouter: process.env.MODEL_OPENROUTER || 'google/gemma-4-31b-it:free',
 };
 
-// Đọc model config từ Vercel KV, fallback về defaults nếu KV chưa cấu hình
+// In-memory TTL cache (60s) — tránh gọi Blob API mỗi request
+let _configCache = null;
+let _cacheTs = 0;
+const CACHE_TTL = 60_000;
+
 async function getModelConfig() {
-  const kvUrl   = process.env.KV_REST_API_URL;
-  const kvToken = process.env.KV_REST_API_TOKEN;
-  if (!kvUrl || !kvToken) return { ...MODEL_DEFAULTS };
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return { ...MODEL_DEFAULTS };
+  const now = Date.now();
+  if (_configCache && now - _cacheTs < CACHE_TTL) return _configCache;
   try {
-    const [r1, r2, r3] = await Promise.all([
-      fetch(`${kvUrl}/get/model:cerebras`,   { headers: { Authorization: `Bearer ${kvToken}` } }).then(r => r.json()),
-      fetch(`${kvUrl}/get/model:groq`,       { headers: { Authorization: `Bearer ${kvToken}` } }).then(r => r.json()),
-      fetch(`${kvUrl}/get/model:openrouter`, { headers: { Authorization: `Bearer ${kvToken}` } }).then(r => r.json()),
-    ]);
-    return {
-      cerebras:   r1.result || MODEL_DEFAULTS.cerebras,
-      groq:       r2.result || MODEL_DEFAULTS.groq,
-      openrouter: r3.result || MODEL_DEFAULTS.openrouter,
+    const { blobs } = await list({ prefix: 'vn2000-model-config.json' });
+    if (!blobs.length) return { ...MODEL_DEFAULTS };
+    const res = await fetch(blobs[0].url, { cache: 'no-store' });
+    const stored = await res.json();
+    _configCache = {
+      cerebras:   stored.cerebras   || MODEL_DEFAULTS.cerebras,
+      groq:       stored.groq       || MODEL_DEFAULTS.groq,
+      openrouter: stored.openrouter || MODEL_DEFAULTS.openrouter,
     };
+    _cacheTs = now;
+    return _configCache;
   } catch {
     return { ...MODEL_DEFAULTS };
   }
