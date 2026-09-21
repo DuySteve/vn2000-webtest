@@ -50,7 +50,7 @@ async function blobWrite(data) {
   if (!token) return { ok: false, error: 'BLOB_READ_WRITE_TOKEN chưa set' };
   try {
     const res = await fetch(
-      `${BLOB_BASE}/${CONFIG_PATH}?addRandomSuffix=false`,
+      `${BLOB_BASE}/${CONFIG_PATH}?addRandomSuffix=false&allowOverwrite=true`,
       {
         method: 'PUT',
         headers: {
