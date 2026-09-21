@@ -46,15 +46,15 @@ async function blobWrite(data) {
   const token = getToken();
   if (!token) return { ok: false, error: 'BLOB_READ_WRITE_TOKEN chưa set' };
   try {
-    // access=private — bắt buộc với private store
     const res = await fetch(
-      `${BLOB_BASE}/${CONFIG_PATH}?addRandomSuffix=0&access=private`,
+      `${BLOB_BASE}/${CONFIG_PATH}?addRandomSuffix=false`,
       {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          'x-access': 'private',          // private store — header bắt buộc
           'x-content-type': 'application/json',
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(data),
       }
