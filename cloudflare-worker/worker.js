@@ -247,7 +247,7 @@ export default {
       if (env.OPENROUTER_API_KEY) {
         providers.push({
           name: 'OpenRouter', apiKey: env.OPENROUTER_API_KEY.trim(),
-          apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: 'nvidia/nemotron-nano-12b-v2-vl:free'
+          apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: 'google/gemma-4-31b-it:free'
         });
       }
       if (providers.length === 0) throw new Error('Chưa cấu hình API Key nào');
