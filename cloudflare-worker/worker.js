@@ -241,7 +241,7 @@ export default {
       if (env.GROQ_API_KEY) {
         providers.push({
           name: 'Groq', apiKey: env.GROQ_API_KEY.trim(),
-          apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: 'qwen/qwen3.6-27b'
+          apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: 'qwen/qwen3.8-27b'
         });
       }
       if (env.OPENROUTER_API_KEY) {

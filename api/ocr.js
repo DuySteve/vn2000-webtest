@@ -238,7 +238,7 @@ export default async function handler(req, res) {
     if (process.env.GROQ_API_KEY) {
       providers.push({
         name: 'Groq', apiKey: process.env.GROQ_API_KEY.trim(),
-        apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: 'qwen/qwen3.6-27b'
+        apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: 'qwen/qwen3.8-27b'
       });
     }
     if (process.env.OPENROUTER_API_KEY) {
