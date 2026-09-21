@@ -24,7 +24,7 @@ const MODEL_DEFAULTS = {
 // In-memory TTL cache (60s) — tránh gọi Blob API mỗi request
 let _configCache = null;
 let _cacheTs = 0;
-const CACHE_TTL = 60_000;
+const CACHE_TTL = 5_000; // 5s — đủ ngắn để config mới có hiệu lực ngay sau khi lưu admin
 
 async function getModelConfig() {
   const token = process.env.BLOB_READ_WRITE_TOKEN;
