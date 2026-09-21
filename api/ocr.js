@@ -1,4 +1,4 @@
-import { list } from '@vercel/blob';
+// Vercel Blob REST API
 
 export const config = {
   runtime: 'nodejs',
@@ -9,7 +9,8 @@ export const config = {
 const REASONING_MODELS = ['qwen/qwen3', 'qwen3', 'deepseek-r1', 'deepseek/deepseek-r1'];
 
 const BLOB_BASE = 'https://blob.vercel-storage.com';
-const BLOB_CONFIG = 'vn2000-model-config.json';
+// PREFIX không có .json → match 'vn2000-model-config-{random}.json'
+const BLOB_CONFIG = 'vn2000-model-config';
 
 // ── Model defaults (override bằng Vercel Blob REST API hoặc env var) ──
 const MODEL_DEFAULTS = {
