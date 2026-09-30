@@ -11,9 +11,10 @@ export const MODEL_DEFAULTS = {
   cerebras:   process.env.MODEL_CEREBRAS   || 'gemma-4-31b',
   groq:       process.env.MODEL_GROQ       || 'qwen/qwen3.8-27b',
   gemini:     process.env.MODEL_GEMINI     || 'gemini-2.0-flash-lite',
+  zai:        process.env.MODEL_ZAI        || 'glm-4.6v',
   openrouter: process.env.MODEL_OPENROUTER || 'google/gemma-4-31b-it:free',
-  order:      ['cerebras', 'groq', 'gemini', 'openrouter'],
-  enabled:    { cerebras: true, groq: true, gemini: true, openrouter: true },
+  order:      ['cerebras', 'groq', 'gemini', 'zai', 'openrouter'],
+  enabled:    { cerebras: true, groq: true, gemini: true, zai: true, openrouter: true },
 };
 
 const getToken  = () => process.env.BLOB_READ_WRITE_TOKEN || '';
@@ -120,6 +121,7 @@ export default async function handler(req, res) {
         cerebras:   stored?.cerebras   || MODEL_DEFAULTS.cerebras,
         groq:       stored?.groq       || MODEL_DEFAULTS.groq,
         gemini:     stored?.gemini     || MODEL_DEFAULTS.gemini,
+        zai:        stored?.zai        || MODEL_DEFAULTS.zai,
         openrouter: stored?.openrouter || MODEL_DEFAULTS.openrouter,
       },
       order:   stored?.order   || MODEL_DEFAULTS.order,
@@ -141,6 +143,7 @@ export default async function handler(req, res) {
       cerebras:   models.cerebras   || MODEL_DEFAULTS.cerebras,
       groq:       models.groq       || MODEL_DEFAULTS.groq,
       gemini:     models.gemini     || MODEL_DEFAULTS.gemini,
+      zai:        models.zai        || MODEL_DEFAULTS.zai,
       openrouter: models.openrouter || MODEL_DEFAULTS.openrouter,
       order:      Array.isArray(order) ? order : MODEL_DEFAULTS.order,
       enabled:    (enabled && typeof enabled === 'object') ? enabled : MODEL_DEFAULTS.enabled,

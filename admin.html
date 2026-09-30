@@ -119,6 +119,7 @@
     .provider-icon.cerebras { background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); }
     .provider-icon.groq     { background: rgba(234,88,12,0.15);  border: 1px solid rgba(234,88,12,0.3); }
     .provider-icon.gemini   { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); }
+    .provider-icon.zai      { background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.3); }
     .provider-icon.openrouter { background: rgba(212,175,55,0.12); border: 1px solid rgba(212,175,55,0.3); }
 
     .provider-info { flex: 1; min-width: 0; }
@@ -253,9 +254,26 @@
           </div>
         </div>
 
-        <div class="provider-card" draggable="true" data-key="openrouter">
+        <div class="provider-card" draggable="true" data-key="zai">
           <div class="drag-handle" title="Kéo để sắp xếp">⠿</div>
           <div class="priority-badge" data-priority>4</div>
+          <div class="provider-icon zai">🤖</div>
+          <div class="provider-info">
+            <div class="provider-name">Z.ai (Zhipu)</div>
+            <div class="provider-desc">GLM Vision · ZAI_API_KEY</div>
+            <input id="m-zai" type="text" placeholder="glm-4.6v" />
+          </div>
+          <div class="toggle-wrap">
+            <label class="toggle" title="Bật/tắt Z.ai">
+              <input type="checkbox" id="en-zai" checked onchange="onToggle(this,'zai')" />
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="provider-card" draggable="true" data-key="openrouter">
+          <div class="drag-handle" title="Kéo để sắp xếp">⠿</div>
+          <div class="priority-badge" data-priority>5</div>
           <div class="provider-icon openrouter">🌐</div>
           <div class="provider-info">
             <div class="provider-name">OpenRouter</div>
@@ -397,11 +415,12 @@
       document.getElementById('m-cerebras').value   = data.models.cerebras   || '';
       document.getElementById('m-groq').value       = data.models.groq       || '';
       document.getElementById('m-gemini').value     = data.models.gemini     || '';
+      document.getElementById('m-zai').value        = data.models.zai        || '';
       document.getElementById('m-openrouter').value = data.models.openrouter || '';
 
       // Apply enabled state
       const en = data.enabled || {};
-      ['cerebras','groq','gemini','openrouter'].forEach(k => {
+      ['cerebras','groq','gemini','zai','openrouter'].forEach(k => {
         const chk = document.getElementById('en-' + k);
         if (chk) {
           chk.checked = en[k] !== false;
@@ -442,18 +461,19 @@
     document.getElementById('m-cerebras').value   = defaults.cerebras   || 'gemma-4-31b';
     document.getElementById('m-groq').value       = defaults.groq       || 'qwen/qwen3.8-27b';
     document.getElementById('m-gemini').value     = defaults.gemini     || 'gemini-2.0-flash-lite';
+    document.getElementById('m-zai').value        = defaults.zai        || 'glm-4.6v';
     document.getElementById('m-openrouter').value = defaults.openrouter || 'google/gemma-4-31b-it:free';
-    ['cerebras','groq','gemini','openrouter'].forEach(k => {
+    ['cerebras','groq','gemini','zai','openrouter'].forEach(k => {
       const chk = document.getElementById('en-' + k);
       if (chk) { chk.checked = true; onToggle(chk, k); }
     });
-    applyOrder(['cerebras','groq','gemini','openrouter']);
+    applyOrder(['cerebras','groq','gemini','zai','openrouter']);
     toast('Đã khôi phục mặc định', 'warning');
   }
 
   function getEnabledState() {
     const result = {};
-    ['cerebras','groq','gemini','openrouter'].forEach(k => {
+    ['cerebras','groq','gemini','zai','openrouter'].forEach(k => {
       const chk = document.getElementById('en-' + k);
       result[k] = chk ? chk.checked : true;
     });
@@ -470,6 +490,7 @@
       cerebras:   document.getElementById('m-cerebras').value.trim(),
       groq:       document.getElementById('m-groq').value.trim(),
       gemini:     document.getElementById('m-gemini').value.trim(),
+      zai:        document.getElementById('m-zai').value.trim(),
       openrouter: document.getElementById('m-openrouter').value.trim(),
     };
     const order   = getProviderOrder();

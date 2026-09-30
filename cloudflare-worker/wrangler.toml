@@ -10,3 +10,4 @@ enabled = true
 # CEREBRAS_API_KEY = "" # Thêm qua Dashboard, không commit vào git
 # GROQ_API_KEY = ""
 # OPENROUTER_API_KEY = ""
+# ZAI_API_KEY = ""       # Z.ai (Zhipu AI) — https://chat.z.ai/

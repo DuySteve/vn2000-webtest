@@ -2,7 +2,7 @@
  * Cloudflare Worker – VN2000 OCR
  *
  * Env secrets cần cấu hình trên Cloudflare Dashboard:
- *   GROQ_API_KEY hoặc OPENROUTER_API_KEY → API Key của provider (Groq/OpenRouter/...)
+ *   GROQ_API_KEY, OPENROUTER_API_KEY, CEREBRAS_API_KEY, ZAI_API_KEY → API Key của provider
  */
 
 // reasoning_effort: 'none' = bỏ block <think>, giảm ~70% token, tránh vượt TPM Groq
@@ -248,6 +248,12 @@ export default {
         providers.push({
           name: 'OpenRouter', apiKey: env.OPENROUTER_API_KEY.trim(),
           apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: 'google/gemma-4-31b-it:free'
+        });
+      }
+      if (env.ZAI_API_KEY) {
+        providers.push({
+          name: 'Z.ai', apiKey: env.ZAI_API_KEY.trim(),
+          apiUrl: 'https://api.z.ai/api/paas/v4/chat/completions', model: 'glm-4.6v'
         });
       }
       if (providers.length === 0) throw new Error('Chưa cấu hình API Key nào');
