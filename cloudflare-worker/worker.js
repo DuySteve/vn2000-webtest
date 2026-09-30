@@ -256,6 +256,12 @@ export default {
           apiUrl: 'https://api.z.ai/api/paas/v4/chat/completions', model: 'GLM-4.6V-Flash'
         });
       }
+      if (env.HUGGINGFACE_API_KEY) {
+        providers.push({
+          name: 'HuggingFace', apiKey: env.HUGGINGFACE_API_KEY.trim(),
+          apiUrl: 'https://router.huggingface.co/v1/chat/completions', model: 'Qwen/Qwen2.5-VL-3B-Instruct'
+        });
+      }
       if (providers.length === 0) throw new Error('Chưa cấu hình API Key nào');
 
       const imageUrl = imageBase64.startsWith('data:image') 

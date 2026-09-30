@@ -11,3 +11,4 @@ enabled = true
 # GROQ_API_KEY = ""
 # OPENROUTER_API_KEY = ""
 # ZAI_API_KEY = ""       # Z.ai (Zhipu AI) — https://chat.z.ai/
+# HUGGINGFACE_API_KEY = "" # Hugging Face — https://huggingface.co/settings/tokens

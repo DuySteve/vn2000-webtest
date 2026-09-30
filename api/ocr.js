@@ -18,9 +18,10 @@ const MODEL_DEFAULTS = {
   groq: process.env.MODEL_GROQ || 'qwen/qwen3.8-27b',
   gemini: process.env.MODEL_GEMINI || 'gemini-2.0-flash-lite',
   zai: process.env.MODEL_ZAI || 'GLM-4.6V-Flash',
+  huggingface: process.env.MODEL_HUGGINGFACE || 'Qwen/Qwen2.5-VL-3B-Instruct',
   openrouter: process.env.MODEL_OPENROUTER || 'google/gemma-4-31b-it:free',
-  order: ['cerebras', 'groq', 'gemini', 'zai', 'openrouter'],
-  enabled: { cerebras: true, groq: true, gemini: true, zai: true, openrouter: true },
+  order: ['cerebras', 'groq', 'gemini', 'zai', 'huggingface', 'openrouter'],
+  enabled: { cerebras: true, groq: true, gemini: true, zai: true, huggingface: true, openrouter: true },
 };
 
 // In-memory TTL cache (60s) — tránh gọi Blob API mỗi request
@@ -51,6 +52,7 @@ async function getModelConfig() {
       groq: stored.groq || MODEL_DEFAULTS.groq,
       gemini: stored.gemini || MODEL_DEFAULTS.gemini,
       zai: stored.zai || MODEL_DEFAULTS.zai,
+      huggingface: stored.huggingface || MODEL_DEFAULTS.huggingface,
       openrouter: stored.openrouter || MODEL_DEFAULTS.openrouter,
       order: Array.isArray(stored.order) ? stored.order : MODEL_DEFAULTS.order,
       enabled: stored.enabled ?? MODEL_DEFAULTS.enabled,
@@ -308,6 +310,12 @@ export default async function handler(req, res) {
         apiKey: process.env.ZAI_API_KEY.trim(),
         apiUrl: 'https://api.z.ai/api/paas/v4/chat/completions',
         model: modelConfig.zai,
+      } : null,
+      huggingface: process.env.HUGGINGFACE_API_KEY ? {
+        name: 'HuggingFace', type: 'openai',
+        apiKey: process.env.HUGGINGFACE_API_KEY.trim(),
+        apiUrl: 'https://router.huggingface.co/v1/chat/completions',
+        model: modelConfig.huggingface,
       } : null,
       openrouter: process.env.OPENROUTER_API_KEY ? {
         name: 'OpenRouter', type: 'openai',
