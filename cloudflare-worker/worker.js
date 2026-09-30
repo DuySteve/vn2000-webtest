@@ -253,7 +253,7 @@ export default {
       if (env.ZAI_API_KEY) {
         providers.push({
           name: 'Z.ai', apiKey: env.ZAI_API_KEY.trim(),
-          apiUrl: 'https://api.z.ai/api/paas/v4/chat/completions', model: 'glm-4.6v'
+          apiUrl: 'https://api.z.ai/api/paas/v4/chat/completions', model: 'GLM-4.6V-Flash'
         });
       }
       if (providers.length === 0) throw new Error('Chưa cấu hình API Key nào');

@@ -261,7 +261,7 @@
           <div class="provider-info">
             <div class="provider-name">Z.ai (Zhipu)</div>
             <div class="provider-desc">GLM Vision · ZAI_API_KEY</div>
-            <input id="m-zai" type="text" placeholder="glm-4.6v" />
+            <input id="m-zai" type="text" placeholder="GLM-4.6V-Flash" />
           </div>
           <div class="toggle-wrap">
             <label class="toggle" title="Bật/tắt Z.ai">
@@ -461,7 +461,7 @@
     document.getElementById('m-cerebras').value   = defaults.cerebras   || 'gemma-4-31b';
     document.getElementById('m-groq').value       = defaults.groq       || 'qwen/qwen3.8-27b';
     document.getElementById('m-gemini').value     = defaults.gemini     || 'gemini-2.0-flash-lite';
-    document.getElementById('m-zai').value        = defaults.zai        || 'glm-4.6v';
+    document.getElementById('m-zai').value        = defaults.zai        || 'GLM-4.6V-Flash';
     document.getElementById('m-openrouter').value = defaults.openrouter || 'google/gemma-4-31b-it:free';
     ['cerebras','groq','gemini','zai','openrouter'].forEach(k => {
       const chk = document.getElementById('en-' + k);

@@ -11,7 +11,7 @@ export const MODEL_DEFAULTS = {
   cerebras:   process.env.MODEL_CEREBRAS   || 'gemma-4-31b',
   groq:       process.env.MODEL_GROQ       || 'qwen/qwen3.8-27b',
   gemini:     process.env.MODEL_GEMINI     || 'gemini-2.0-flash-lite',
-  zai:        process.env.MODEL_ZAI        || 'glm-4.6v',
+  zai:        process.env.MODEL_ZAI        || 'GLM-4.6V-Flash',
   openrouter: process.env.MODEL_OPENROUTER || 'google/gemma-4-31b-it:free',
   order:      ['cerebras', 'groq', 'gemini', 'zai', 'openrouter'],
   enabled:    { cerebras: true, groq: true, gemini: true, zai: true, openrouter: true },
